@@ -1,48 +1,22 @@
 ﻿const express = require('express');
 const multer = require('multer');
-const fs = require('fs');
 const path = require('path');
+const { createClient } = require('@supabase/supabase-js');
 
 const app = express();
 const port = process.env.PORT || 3000;
 
-const uploadsDir = path.join(__dirname, 'uploads');
-const dataDir = path.join(__dirname, 'data');
-const submissionsPath = path.join(dataDir, 'submissions.json');
+const supabaseUrl = process.env.SUPABASE_URL;
+const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+const supabaseBucket = process.env.SUPABASE_BUCKET || 'art-submissions';
 
-fs.mkdirSync(uploadsDir, { recursive: true });
-fs.mkdirSync(dataDir, { recursive: true });
-if (!fs.existsSync(submissionsPath)) {
-  fs.writeFileSync(submissionsPath, '[]', 'utf8');
+if (!supabaseUrl || !supabaseServiceRoleKey) {
+  // eslint-disable-next-line no-console
+  console.error('Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY environment variables.');
+  process.exit(1);
 }
 
-function readSubmissions() {
-  try {
-    const raw = fs.readFileSync(submissionsPath, 'utf8');
-    const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed : [];
-  } catch {
-    return [];
-  }
-}
-
-function saveSubmissions(submissions) {
-  fs.writeFileSync(submissionsPath, JSON.stringify(submissions, null, 2), 'utf8');
-}
-
-const storage = multer.diskStorage({
-  destination: (_req, _file, cb) => cb(null, uploadsDir),
-  filename: (_req, file, cb) => {
-    const ext = path.extname(file.originalname || '').toLowerCase();
-    const safeBase = path.basename(file.originalname || 'submission', ext)
-      .replace(/[^a-z0-9_-]/gi, '-')
-      .replace(/-+/g, '-')
-      .slice(0, 60)
-      .toLowerCase();
-    const stamp = `${Date.now()}-${Math.round(Math.random() * 1e9)}`;
-    cb(null, `${safeBase || 'submission'}-${stamp}${ext}`);
-  },
-});
+const supabase = createClient(supabaseUrl, supabaseServiceRoleKey);
 
 const allowedMime = new Set([
   'image/jpeg',
@@ -52,7 +26,7 @@ const allowedMime = new Set([
 ]);
 
 const upload = multer({
-  storage,
+  storage: multer.memoryStorage(),
   limits: {
     fileSize: 10 * 1024 * 1024,
   },
@@ -64,61 +38,124 @@ const upload = multer({
   },
 });
 
+function buildStoragePath(file) {
+  const ext = path.extname(file.originalname || '').toLowerCase();
+  const base = path.basename(file.originalname || 'submission', ext)
+    .replace(/[^a-z0-9_-]/gi, '-')
+    .replace(/-+/g, '-')
+    .slice(0, 60)
+    .toLowerCase();
+  const stamp = `${Date.now()}-${Math.round(Math.random() * 1e9)}`;
+  return `submissions/${base || 'submission'}-${stamp}${ext}`;
+}
+
 app.use(express.json());
-app.use('/uploads', express.static(uploadsDir));
 app.use(express.static(__dirname));
 
 app.get('/api/health', (_req, res) => {
   res.json({ ok: true });
 });
 
-app.get('/api/submissions', (_req, res) => {
-  const submissions = readSubmissions();
-  const recent = submissions.sort((a, b) => new Date(b.submittedAt) - new Date(a.submittedAt));
-  res.json({ submissions: recent.slice(0, 50) });
+app.get('/api/submissions', async (_req, res, next) => {
+  try {
+    const { data, error } = await supabase
+      .from('submissions')
+      .select('id, artist_name, art_title, artist_email, original_filename, file_url, file_type, submitted_at')
+      .order('submitted_at', { ascending: false })
+      .limit(50);
+
+    if (error) {
+      throw new Error(error.message);
+    }
+
+    const submissions = (data || []).map((row) => ({
+      id: row.id,
+      artistName: row.artist_name,
+      artTitle: row.art_title,
+      artistEmail: row.artist_email,
+      originalFilename: row.original_filename,
+      fileUrl: row.file_url,
+      fileType: row.file_type,
+      submittedAt: row.submitted_at,
+    }));
+
+    res.json({ submissions });
+  } catch (error) {
+    next(error);
+  }
 });
 
-app.post('/api/submissions', upload.single('artFile'), (req, res) => {
-  const artistName = String(req.body.artistName || '').trim();
-  const artTitle = String(req.body.artTitle || '').trim();
-  const artistEmail = String(req.body.artistEmail || '').trim();
+app.post('/api/submissions', upload.single('artFile'), async (req, res, next) => {
+  try {
+    const artistName = String(req.body.artistName || '').trim();
+    const artTitle = String(req.body.artTitle || '').trim();
+    const artistEmail = String(req.body.artistEmail || '').trim();
 
-  if (!artistName || !artTitle || !artistEmail || !req.file) {
-    if (req.file?.path) {
-      fs.rmSync(req.file.path, { force: true });
+    if (!artistName || !artTitle || !artistEmail || !req.file) {
+      return res.status(400).json({
+        error: 'artistName, artTitle, artistEmail, and artFile are required.',
+      });
     }
-    return res.status(400).json({
-      error: 'artistName, artTitle, artistEmail, and artFile are required.',
+
+    const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailPattern.test(artistEmail)) {
+      return res.status(400).json({ error: 'Please provide a valid email.' });
+    }
+
+    const storagePath = buildStoragePath(req.file);
+
+    const { error: uploadError } = await supabase.storage
+      .from(supabaseBucket)
+      .upload(storagePath, req.file.buffer, {
+        contentType: req.file.mimetype,
+        upsert: false,
+      });
+
+    if (uploadError) {
+      throw new Error(uploadError.message);
+    }
+
+    const { data: publicUrlData } = supabase.storage
+      .from(supabaseBucket)
+      .getPublicUrl(storagePath);
+
+    const record = {
+      artist_name: artistName,
+      art_title: artTitle,
+      artist_email: artistEmail,
+      original_filename: req.file.originalname,
+      file_url: publicUrlData.publicUrl,
+      file_type: req.file.mimetype,
+    };
+
+    const { data: inserted, error: insertError } = await supabase
+      .from('submissions')
+      .insert(record)
+      .select('id, artist_name, art_title, artist_email, original_filename, file_url, file_type, submitted_at')
+      .single();
+
+    if (insertError) {
+      throw new Error(insertError.message);
+    }
+
+    const submission = {
+      id: inserted.id,
+      artistName: inserted.artist_name,
+      artTitle: inserted.art_title,
+      artistEmail: inserted.artist_email,
+      originalFilename: inserted.original_filename,
+      fileUrl: inserted.file_url,
+      fileType: inserted.file_type,
+      submittedAt: inserted.submitted_at,
+    };
+
+    res.status(201).json({
+      message: 'Submission received successfully.',
+      submission,
     });
+  } catch (error) {
+    next(error);
   }
-
-  const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-  if (!emailPattern.test(artistEmail)) {
-    if (req.file?.path) {
-      fs.rmSync(req.file.path, { force: true });
-    }
-    return res.status(400).json({ error: 'Please provide a valid email.' });
-  }
-
-  const submissions = readSubmissions();
-  const submission = {
-    id: `${Date.now()}-${Math.round(Math.random() * 1e9)}`,
-    artistName,
-    artTitle,
-    artistEmail,
-    originalFilename: req.file.originalname,
-    fileUrl: `/uploads/${req.file.filename}`,
-    fileType: req.file.mimetype,
-    submittedAt: new Date().toISOString(),
-  };
-
-  submissions.push(submission);
-  saveSubmissions(submissions);
-
-  res.status(201).json({
-    message: 'Submission received successfully.',
-    submission,
-  });
 });
 
 app.use((err, _req, res, _next) => {
