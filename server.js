@@ -9,6 +9,9 @@ const port = process.env.PORT || 3000;
 const supabaseUrl = process.env.SUPABASE_URL;
 const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const supabaseBucket = process.env.SUPABASE_BUCKET || 'art-submissions';
+const adminToken = process.env.ADMIN_TOKEN || '';
+const rateLimitWindowMs = Number.parseInt(process.env.RATE_LIMIT_WINDOW_MS || '600000', 10);
+const rateLimitMax = Number.parseInt(process.env.RATE_LIMIT_MAX || '8', 10);
 
 if (!supabaseUrl || !supabaseServiceRoleKey) {
   // eslint-disable-next-line no-console
@@ -17,6 +20,7 @@ if (!supabaseUrl || !supabaseServiceRoleKey) {
 }
 
 const supabase = createClient(supabaseUrl, supabaseServiceRoleKey);
+const submissionHitsByIp = new Map();
 
 const allowedMime = new Set([
   'image/jpeg',
@@ -49,6 +53,74 @@ function buildStoragePath(file) {
   return `submissions/${base || 'submission'}-${stamp}${ext}`;
 }
 
+function getClientIp(req) {
+  const forwarded = String(req.headers['x-forwarded-for'] || '');
+  if (forwarded) {
+    return forwarded.split(',')[0].trim();
+  }
+  return String(req.ip || 'unknown').trim();
+}
+
+function checkSubmissionRateLimit(req, res, next) {
+  const ip = getClientIp(req);
+  const now = Date.now();
+  const earliestAllowed = now - rateLimitWindowMs;
+  const recentHits = (submissionHitsByIp.get(ip) || []).filter((ts) => ts > earliestAllowed);
+
+  if (recentHits.length >= rateLimitMax) {
+    return res.status(429).json({
+      error: 'Too many submissions right now. Please wait a few minutes before trying again.',
+    });
+  }
+
+  recentHits.push(now);
+  submissionHitsByIp.set(ip, recentHits);
+  next();
+}
+
+function requireAdmin(req, res, next) {
+  if (!adminToken) {
+    return res.status(503).json({ error: 'ADMIN_TOKEN is not configured on the server.' });
+  }
+
+  const provided = String(req.get('x-admin-token') || req.query.token || '').trim();
+  if (!provided || provided !== adminToken) {
+    return res.status(401).json({ error: 'Unauthorized admin access.' });
+  }
+
+  next();
+}
+
+function toPublicSubmission(row) {
+  return {
+    id: row.id,
+    artistName: row.artist_name,
+    artTitle: row.art_title,
+    originalFilename: row.original_filename,
+    fileUrl: row.file_url,
+    fileType: row.file_type,
+    submittedAt: row.submitted_at,
+  };
+}
+
+function toAdminSubmission(row) {
+  return {
+    id: row.id,
+    artistName: row.artist_name,
+    artTitle: row.art_title,
+    artistEmail: row.artist_email,
+    originalFilename: row.original_filename,
+    fileUrl: row.file_url,
+    fileType: row.file_type,
+    submittedAt: row.submitted_at,
+  };
+}
+
+function escapeCsv(value) {
+  const raw = String(value ?? '');
+  return `"${raw.replace(/"/g, '""')}"`;
+}
+
 app.use(express.json());
 app.use(express.static(__dirname));
 
@@ -60,7 +132,7 @@ app.get('/api/submissions', async (_req, res, next) => {
   try {
     const { data, error } = await supabase
       .from('submissions')
-      .select('id, artist_name, art_title, artist_email, original_filename, file_url, file_type, submitted_at')
+      .select('id, artist_name, art_title, original_filename, file_url, file_type, submitted_at')
       .order('submitted_at', { ascending: false })
       .limit(50);
 
@@ -68,25 +140,84 @@ app.get('/api/submissions', async (_req, res, next) => {
       throw new Error(error.message);
     }
 
-    const submissions = (data || []).map((row) => ({
-      id: row.id,
-      artistName: row.artist_name,
-      artTitle: row.art_title,
-      artistEmail: row.artist_email,
-      originalFilename: row.original_filename,
-      fileUrl: row.file_url,
-      fileType: row.file_type,
-      submittedAt: row.submitted_at,
-    }));
-
-    res.json({ submissions });
+    res.json({ submissions: (data || []).map(toPublicSubmission) });
   } catch (error) {
     next(error);
   }
 });
 
-app.post('/api/submissions', upload.single('artFile'), async (req, res, next) => {
+app.get('/api/admin/submissions', requireAdmin, async (_req, res, next) => {
   try {
+    const { data, error } = await supabase
+      .from('submissions')
+      .select('id, artist_name, art_title, artist_email, original_filename, file_url, file_type, submitted_at')
+      .order('submitted_at', { ascending: false })
+      .limit(1000);
+
+    if (error) {
+      throw new Error(error.message);
+    }
+
+    res.json({ submissions: (data || []).map(toAdminSubmission) });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.get('/api/admin/submissions.csv', requireAdmin, async (_req, res, next) => {
+  try {
+    const { data, error } = await supabase
+      .from('submissions')
+      .select('id, artist_name, art_title, artist_email, original_filename, file_url, file_type, submitted_at')
+      .order('submitted_at', { ascending: false })
+      .limit(10000);
+
+    if (error) {
+      throw new Error(error.message);
+    }
+
+    const header = [
+      'id',
+      'artist_name',
+      'art_title',
+      'artist_email',
+      'original_filename',
+      'file_url',
+      'file_type',
+      'submitted_at',
+    ];
+
+    const rows = (data || []).map((row) => [
+      row.id,
+      row.artist_name,
+      row.art_title,
+      row.artist_email,
+      row.original_filename,
+      row.file_url,
+      row.file_type,
+      row.submitted_at,
+    ]);
+
+    const csv = [
+      header.map(escapeCsv).join(','),
+      ...rows.map((row) => row.map(escapeCsv).join(',')),
+    ].join('\n');
+
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', 'attachment; filename="submissions.csv"');
+    res.status(200).send(csv);
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.post('/api/submissions', checkSubmissionRateLimit, upload.single('artFile'), async (req, res, next) => {
+  try {
+    const honeypotValue = String(req.body.website || '').trim();
+    if (honeypotValue) {
+      return res.status(202).json({ message: 'Submission received successfully.' });
+    }
+
     const artistName = String(req.body.artistName || '').trim();
     const artTitle = String(req.body.artTitle || '').trim();
     const artistEmail = String(req.body.artistEmail || '').trim();
@@ -138,20 +269,9 @@ app.post('/api/submissions', upload.single('artFile'), async (req, res, next) =>
       throw new Error(insertError.message);
     }
 
-    const submission = {
-      id: inserted.id,
-      artistName: inserted.artist_name,
-      artTitle: inserted.art_title,
-      artistEmail: inserted.artist_email,
-      originalFilename: inserted.original_filename,
-      fileUrl: inserted.file_url,
-      fileType: inserted.file_type,
-      submittedAt: inserted.submitted_at,
-    };
-
     res.status(201).json({
       message: 'Submission received successfully.',
-      submission,
+      submission: toAdminSubmission(inserted),
     });
   } catch (error) {
     next(error);
