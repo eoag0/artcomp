@@ -100,6 +100,7 @@ function toPublicSubmission(row) {
     fileUrl: row.file_url,
     fileType: row.file_type,
     submittedAt: row.submitted_at,
+    finalistTier: row.finalistTier || null,
   };
 }
 
@@ -113,12 +114,30 @@ function toAdminSubmission(row) {
     fileUrl: row.file_url,
     fileType: row.file_type,
     submittedAt: row.submitted_at,
+    finalistTier: row.finalistTier || null,
   };
 }
 
 function escapeCsv(value) {
   const raw = String(value ?? '');
   return `"${raw.replace(/"/g, '""')}"`;
+}
+
+async function fetchFinalistMap() {
+  const { data, error } = await supabase
+    .from('finalists')
+    .select('submission_id, tier, tagged_at');
+
+  if (error) throw new Error(error.message);
+
+  const map = new Map();
+  (data || []).forEach((row) => {
+    map.set(Number(row.submission_id), {
+      tier: String(row.tier || 'Finalist'),
+      taggedAt: row.tagged_at,
+    });
+  });
+  return map;
 }
 
 app.use(express.json());
@@ -130,17 +149,66 @@ app.get('/api/health', (_req, res) => {
 
 app.get('/api/submissions', async (_req, res, next) => {
   try {
-    const { data, error } = await supabase
-      .from('submissions')
-      .select('id, artist_name, art_title, original_filename, file_url, file_type, submitted_at')
-      .order('submitted_at', { ascending: false })
-      .limit(50);
+    const [submissionsRes, finalistMap] = await Promise.all([
+      supabase
+        .from('submissions')
+        .select('id, artist_name, art_title, original_filename, file_url, file_type, submitted_at')
+        .order('submitted_at', { ascending: false })
+        .limit(50),
+      fetchFinalistMap(),
+    ]);
 
-    if (error) {
-      throw new Error(error.message);
+    if (submissionsRes.error) {
+      throw new Error(submissionsRes.error.message);
     }
 
-    res.json({ submissions: (data || []).map(toPublicSubmission) });
+    const merged = (submissionsRes.data || []).map((row) => ({
+      ...row,
+      finalistTier: finalistMap.get(Number(row.id))?.tier || null,
+    }));
+
+    res.json({ submissions: merged.map(toPublicSubmission) });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.get('/api/finalists', async (_req, res, next) => {
+  try {
+    const { data: finalistRows, error: finalistsError } = await supabase
+      .from('finalists')
+      .select('submission_id, tier, tagged_at')
+      .order('tagged_at', { ascending: false })
+      .limit(100);
+
+    if (finalistsError) throw new Error(finalistsError.message);
+
+    const ids = (finalistRows || []).map((row) => Number(row.submission_id));
+    if (ids.length === 0) {
+      return res.json({ submissions: [] });
+    }
+
+    const { data: submissionRows, error: submissionsError } = await supabase
+      .from('submissions')
+      .select('id, artist_name, art_title, original_filename, file_url, file_type, submitted_at')
+      .in('id', ids);
+
+    if (submissionsError) throw new Error(submissionsError.message);
+
+    const byId = new Map((submissionRows || []).map((row) => [Number(row.id), row]));
+    const merged = (finalistRows || [])
+      .map((row) => {
+        const submission = byId.get(Number(row.submission_id));
+        if (!submission) return null;
+        return {
+          ...submission,
+          finalistTier: String(row.tier || 'Finalist'),
+          taggedAt: row.tagged_at,
+        };
+      })
+      .filter(Boolean);
+
+    res.json({ submissions: merged.map(toPublicSubmission) });
   } catch (error) {
     next(error);
   }
@@ -148,17 +216,23 @@ app.get('/api/submissions', async (_req, res, next) => {
 
 app.get('/api/admin/submissions', requireAdmin, async (_req, res, next) => {
   try {
-    const { data, error } = await supabase
-      .from('submissions')
-      .select('id, artist_name, art_title, artist_email, original_filename, file_url, file_type, submitted_at')
-      .order('submitted_at', { ascending: false })
-      .limit(1000);
+    const [submissionsRes, finalistMap] = await Promise.all([
+      supabase
+        .from('submissions')
+        .select('id, artist_name, art_title, artist_email, original_filename, file_url, file_type, submitted_at')
+        .order('submitted_at', { ascending: false })
+        .limit(1000),
+      fetchFinalistMap(),
+    ]);
 
-    if (error) {
-      throw new Error(error.message);
-    }
+    if (submissionsRes.error) throw new Error(submissionsRes.error.message);
 
-    res.json({ submissions: (data || []).map(toAdminSubmission) });
+    const merged = (submissionsRes.data || []).map((row) => ({
+      ...row,
+      finalistTier: finalistMap.get(Number(row.id))?.tier || null,
+    }));
+
+    res.json({ submissions: merged.map(toAdminSubmission) });
   } catch (error) {
     next(error);
   }
@@ -166,15 +240,16 @@ app.get('/api/admin/submissions', requireAdmin, async (_req, res, next) => {
 
 app.get('/api/admin/submissions.csv', requireAdmin, async (_req, res, next) => {
   try {
-    const { data, error } = await supabase
-      .from('submissions')
-      .select('id, artist_name, art_title, artist_email, original_filename, file_url, file_type, submitted_at')
-      .order('submitted_at', { ascending: false })
-      .limit(10000);
+    const [submissionsRes, finalistMap] = await Promise.all([
+      supabase
+        .from('submissions')
+        .select('id, artist_name, art_title, artist_email, original_filename, file_url, file_type, submitted_at')
+        .order('submitted_at', { ascending: false })
+        .limit(10000),
+      fetchFinalistMap(),
+    ]);
 
-    if (error) {
-      throw new Error(error.message);
-    }
+    if (submissionsRes.error) throw new Error(submissionsRes.error.message);
 
     const header = [
       'id',
@@ -184,10 +259,11 @@ app.get('/api/admin/submissions.csv', requireAdmin, async (_req, res, next) => {
       'original_filename',
       'file_url',
       'file_type',
+      'finalist_tier',
       'submitted_at',
     ];
 
-    const rows = (data || []).map((row) => [
+    const rows = (submissionsRes.data || []).map((row) => [
       row.id,
       row.artist_name,
       row.art_title,
@@ -195,6 +271,7 @@ app.get('/api/admin/submissions.csv', requireAdmin, async (_req, res, next) => {
       row.original_filename,
       row.file_url,
       row.file_type,
+      finalistMap.get(Number(row.id))?.tier || '',
       row.submitted_at,
     ]);
 
@@ -206,6 +283,51 @@ app.get('/api/admin/submissions.csv', requireAdmin, async (_req, res, next) => {
     res.setHeader('Content-Type', 'text/csv; charset=utf-8');
     res.setHeader('Content-Disposition', 'attachment; filename="submissions.csv"');
     res.status(200).send(csv);
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.post('/api/admin/finalists', requireAdmin, async (req, res, next) => {
+  try {
+    const submissionId = Number.parseInt(String(req.body.submissionId || ''), 10);
+    const tier = String(req.body.tier || 'Finalist').trim() || 'Finalist';
+
+    if (!Number.isInteger(submissionId) || submissionId <= 0) {
+      return res.status(400).json({ error: 'A valid submissionId is required.' });
+    }
+
+    const { error } = await supabase
+      .from('finalists')
+      .upsert(
+        {
+          submission_id: submissionId,
+          tier,
+          tagged_at: new Date().toISOString(),
+        },
+        { onConflict: 'submission_id' }
+      );
+
+    if (error) throw new Error(error.message);
+
+    return res.status(200).json({ message: 'Finalist tag updated.' });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.delete('/api/admin/finalists/:submissionId', requireAdmin, async (req, res, next) => {
+  try {
+    const submissionId = Number.parseInt(String(req.params.submissionId || ''), 10);
+
+    if (!Number.isInteger(submissionId) || submissionId <= 0) {
+      return res.status(400).json({ error: 'A valid submissionId is required.' });
+    }
+
+    const { error } = await supabase.from('finalists').delete().eq('submission_id', submissionId);
+    if (error) throw new Error(error.message);
+
+    return res.status(200).json({ message: 'Finalist tag removed.' });
   } catch (error) {
     next(error);
   }

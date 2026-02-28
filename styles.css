@@ -436,6 +436,21 @@ ul {
   font-size: 0.9rem;
 }
 
+.submission-badge {
+  display: inline-block;
+  width: fit-content;
+  background: #fff1cd;
+  border: 1px solid #f2c46d;
+  color: #7a4f06;
+  border-radius: 999px;
+  padding: 0.1rem 0.55rem;
+  font-weight: 700;
+}
+
+.finalist-grid .art-slot {
+  border-style: solid;
+}
+
 .upload-form,
 .contact-form {
   display: grid;
@@ -538,6 +553,12 @@ textarea:focus {
 .admin-table th {
   background: #fff7ef;
   font-weight: 800;
+}
+
+.admin-tag-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
 }
 
 .footer-grid {

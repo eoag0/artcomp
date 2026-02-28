@@ -16,7 +16,7 @@
       <header class="admin-head">
         <p class="kicker">Admin</p>
         <h1>Submission Review</h1>
-        <p class="section-intro">Use your admin token to review submissions and export CSV for judging workflows.</p>
+        <p class="section-intro">Use your admin token to review submissions, tag finalists/winners, and export CSV.</p>
       </header>
 
       <section class="panel">
@@ -35,11 +35,12 @@
                 <th>Artist</th>
                 <th>Email</th>
                 <th>Title</th>
+                <th>Tag</th>
                 <th>File</th>
               </tr>
             </thead>
             <tbody id="admin-tbody">
-              <tr><td colspan="5">Enter token and click "Load Submissions".</td></tr>
+              <tr><td colspan="6">Enter token and click "Load Submissions".</td></tr>
             </tbody>
           </table>
         </div>
@@ -53,29 +54,33 @@
     const exportBtn = document.getElementById('export-btn');
     const statusNode = document.getElementById('admin-status');
     const tbody = document.getElementById('admin-tbody');
+    let currentToken = '';
 
     function setStatus(message, type) {
       statusNode.textContent = message;
       statusNode.className = `form-status ${type || ''}`.trim();
     }
 
-    function renderRows(submissions) {
-      if (!Array.isArray(submissions) || submissions.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="5">No submissions found.</td></tr>';
-        return;
-      }
-
-      const escapeHtml = (value) => String(value || '')
+    function escapeHtml(value) {
+      return String(value || '')
         .replace(/&/g, '&amp;')
         .replace(/</g, '&lt;')
         .replace(/>/g, '&gt;')
         .replace(/"/g, '&quot;')
         .replace(/'/g, '&#39;');
+    }
+
+    function renderRows(submissions) {
+      if (!Array.isArray(submissions) || submissions.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="6">No submissions found.</td></tr>';
+        return;
+      }
 
       tbody.innerHTML = submissions.map((item) => {
         const submitted = new Date(item.submittedAt);
         const dateLabel = Number.isNaN(submitted.getTime()) ? 'Unknown' : submitted.toLocaleString();
         const safeUrl = encodeURI(String(item.fileUrl || ''));
+        const tagLabel = item.finalistTier ? `<span class="submission-badge">${escapeHtml(item.finalistTier)}</span>` : '<small>Not tagged</small>';
 
         return `
           <tr>
@@ -83,15 +88,22 @@
             <td>${escapeHtml(item.artistName)}</td>
             <td>${escapeHtml(item.artistEmail)}</td>
             <td>${escapeHtml(item.artTitle)}</td>
+            <td>
+              ${tagLabel}
+              <div class="admin-tag-controls">
+                <button type="button" class="btn btn-secondary admin-tag-btn" data-action="finalist" data-id="${item.id}">Finalist</button>
+                <button type="button" class="btn btn-secondary admin-tag-btn" data-action="winner" data-id="${item.id}">Winner</button>
+                <button type="button" class="btn btn-secondary admin-tag-btn" data-action="clear" data-id="${item.id}">Clear</button>
+              </div>
+            </td>
             <td><a href="${safeUrl}" target="_blank" rel="noopener">Open</a></td>
           </tr>
         `;
       }).join('');
     }
 
-    loadBtn.addEventListener('click', async () => {
-      const token = tokenInput.value.trim();
-      if (!token) {
+    async function loadSubmissions() {
+      if (!currentToken) {
         setStatus('Enter your admin token first.', 'error');
         return;
       }
@@ -102,7 +114,7 @@
       try {
         const response = await fetch('/api/admin/submissions', {
           headers: {
-            'x-admin-token': token,
+            'x-admin-token': currentToken,
           },
         });
 
@@ -118,6 +130,11 @@
       } finally {
         loadBtn.disabled = false;
       }
+    }
+
+    loadBtn.addEventListener('click', async () => {
+      currentToken = tokenInput.value.trim();
+      await loadSubmissions();
     });
 
     exportBtn.addEventListener('click', () => {
@@ -128,6 +145,51 @@
       }
 
       window.location.href = `/api/admin/submissions.csv?token=${encodeURIComponent(token)}`;
+    });
+
+    tbody.addEventListener('click', async (event) => {
+      const target = event.target;
+      if (!(target instanceof HTMLButtonElement) || !target.classList.contains('admin-tag-btn')) return;
+
+      const submissionId = Number.parseInt(target.dataset.id || '', 10);
+      const action = target.dataset.action || '';
+      if (!Number.isInteger(submissionId)) return;
+
+      currentToken = tokenInput.value.trim();
+      if (!currentToken) {
+        setStatus('Enter your admin token first.', 'error');
+        return;
+      }
+
+      target.disabled = true;
+      try {
+        if (action === 'clear') {
+          const response = await fetch(`/api/admin/finalists/${submissionId}`, {
+            method: 'DELETE',
+            headers: { 'x-admin-token': currentToken },
+          });
+          const payload = await response.json();
+          if (!response.ok) throw new Error(payload.error || 'Could not clear tag.');
+        } else {
+          const tier = action === 'winner' ? 'Winner' : 'Finalist';
+          const response = await fetch('/api/admin/finalists', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'x-admin-token': currentToken,
+            },
+            body: JSON.stringify({ submissionId, tier }),
+          });
+          const payload = await response.json();
+          if (!response.ok) throw new Error(payload.error || 'Could not update tag.');
+        }
+
+        await loadSubmissions();
+      } catch (error) {
+        setStatus(error.message || 'Tag update failed.', 'error');
+      } finally {
+        target.disabled = false;
+      }
     });
   </script>
 </body>

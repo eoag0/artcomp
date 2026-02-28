@@ -9,6 +9,7 @@ const statBubbles = document.querySelectorAll('.stat-bubble');
 const submissionForm = document.getElementById('submission-form');
 const submissionStatus = document.getElementById('submission-status');
 const galleryGrid = document.getElementById('gallery-grid');
+const finalistsGrid = document.getElementById('finalists-grid');
 
 if (navToggle && navLinksContainer) {
   navToggle.addEventListener('click', () => {
@@ -112,11 +113,42 @@ function renderSubmissionCards(submissions) {
         <strong>${submission.artTitle}</strong>
         <small>by ${submission.artistName}</small>
         <small>${dateLabel}</small>
+        ${submission.finalistTier ? `<small class="submission-badge">${submission.finalistTier}</small>` : ''}
         <a href="${submission.fileUrl}" target="_blank" rel="noopener">View File</a>
       </div>
     `;
 
     galleryGrid.appendChild(article);
+  });
+}
+
+function renderFinalistCards(submissions) {
+  if (!finalistsGrid) return;
+
+  finalistsGrid.innerHTML = '';
+  if (!Array.isArray(submissions) || submissions.length === 0) {
+    finalistsGrid.innerHTML = '<article class="art-slot"><span>No finalist tags yet.</span></article>';
+    return;
+  }
+
+  submissions.forEach((submission) => {
+    const article = document.createElement('article');
+    article.className = 'art-slot submission-card';
+    const uploadedDate = new Date(submission.submittedAt);
+    const dateLabel = Number.isNaN(uploadedDate.getTime())
+      ? 'Unknown date'
+      : uploadedDate.toLocaleDateString();
+
+    article.innerHTML = `
+      <div class="submission-meta">
+        <strong>${submission.artTitle}</strong>
+        <small>by ${submission.artistName}</small>
+        <small>${dateLabel}</small>
+        <small class="submission-badge">${submission.finalistTier || 'Finalist'}</small>
+        <a href="${submission.fileUrl}" target="_blank" rel="noopener">View File</a>
+      </div>
+    `;
+    finalistsGrid.appendChild(article);
   });
 }
 
@@ -130,6 +162,17 @@ async function loadRecentSubmissions() {
     }
   } catch {
     // Keep placeholders if backend is unavailable.
+  }
+}
+
+async function loadFinalists() {
+  try {
+    const response = await fetch('/api/finalists');
+    if (!response.ok) return;
+    const payload = await response.json();
+    renderFinalistCards(payload.submissions || []);
+  } catch {
+    // Keep placeholder if backend is unavailable.
   }
 }
 
@@ -176,6 +219,7 @@ if (submissionForm && submissionStatus) {
       submissionStatus.className = 'form-status success';
       submissionForm.reset();
       await loadRecentSubmissions();
+      await loadFinalists();
     } catch (error) {
       submissionStatus.textContent = error.message || 'Could not submit. Please try again.';
       submissionStatus.className = 'form-status error';
@@ -220,3 +264,4 @@ if (yearNode) {
 }
 
 loadRecentSubmissions();
+loadFinalists();
