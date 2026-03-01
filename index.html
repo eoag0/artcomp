@@ -72,10 +72,6 @@
             <ellipse cx="245" cy="115" rx="58" ry="38" transform="rotate(45 245 115)" fill="url(#petalGrad)"></ellipse>
             <ellipse cx="115" cy="245" rx="58" ry="38" transform="rotate(45 115 245)" fill="url(#petalGrad)"></ellipse>
           </svg>
-          <div class="stat-bubble" data-target="50">
-            <strong><span class="count">0</span></strong>
-            <small>finalist works selected by judges</small>
-          </div>
           <div class="stat-bubble" data-target="19">
             <strong>Ages 15-<span class="count">0</span></strong>
             <small>eligible youth artists in NC</small>
@@ -131,11 +127,11 @@
           </article>
           <article class="info-card">
             <h3>What</h3>
-            <p>Original paintings, watercolors, and small sculptures centered on the competition theme: <strong>Peace</strong>.</p>
+            <p>Original paintings, watercolors, and small sculptures. This years theme: <strong>Peace</strong>.</p>
           </article>
           <article class="info-card">
             <h3>How</h3>
-            <p>A professional jury selects finalists (30-50 works), followed by public voting to determine multiple award tiers.</p>
+            <p>A professional jury selects finalists, followed by public voting to determine multiple award tiers.</p>
           </article>
         </div>
 
@@ -207,6 +203,9 @@
 
             <label for="art-dimensions">Dimensions (L x W x H in inches)</label>
             <input id="art-dimensions" name="artDimensions" type="text" placeholder='Example: 24 x 18 x 2 in' required />
+
+            <label for="art-description">Brief description of piece</label>
+            <textarea id="art-description" name="artDescription" rows="4" placeholder="Share the concept, inspiration, or meaning of your work." required></textarea>
 
             <label for="art-file">Upload Artwork</label>
             <input id="art-file" name="artFile" type="file" accept="image/*,.pdf" required />

@@ -136,6 +136,7 @@ function toPublicSubmission(row) {
     artistSchool: row.artist_school || null,
     artTitle: row.art_title,
     artDimensions: row.art_dimensions || null,
+    artDescription: row.art_description || null,
     originalFilename: row.original_filename,
     fileUrl: row.file_url,
     fileType: row.file_type,
@@ -152,6 +153,7 @@ function toAdminSubmission(row) {
     artistSchool: row.artist_school || null,
     artTitle: row.art_title,
     artDimensions: row.art_dimensions || null,
+    artDescription: row.art_description || null,
     artistEmail: row.artist_email,
     originalFilename: row.original_filename,
     fileUrl: row.file_url,
@@ -236,7 +238,7 @@ app.get('/api/submissions', async (_req, res, next) => {
     const [submissionsRes, finalistMap] = await Promise.all([
       supabase
         .from('submissions')
-        .select('id, artist_name, artist_age, artist_school, art_title, art_dimensions, original_filename, file_url, file_type, submitted_at')
+        .select('id, artist_name, artist_age, artist_school, art_title, art_dimensions, art_description, original_filename, file_url, file_type, submitted_at')
         .order('submitted_at', { ascending: false })
         .limit(50),
       fetchFinalistMap(),
@@ -274,7 +276,7 @@ app.get('/api/finalists', async (_req, res, next) => {
 
     const { data: submissionRows, error: submissionsError } = await supabase
       .from('submissions')
-      .select('id, artist_name, artist_age, artist_school, art_title, art_dimensions, original_filename, file_url, file_type, submitted_at')
+      .select('id, artist_name, artist_age, artist_school, art_title, art_dimensions, art_description, original_filename, file_url, file_type, submitted_at')
       .in('id', ids);
 
     if (submissionsError) throw new Error(submissionsError.message);
@@ -303,7 +305,7 @@ app.get('/api/admin/submissions', requireAdmin, async (_req, res, next) => {
     const [submissionsRes, finalistMap] = await Promise.all([
       supabase
         .from('submissions')
-        .select('id, artist_name, artist_age, artist_school, art_title, art_dimensions, artist_email, original_filename, file_url, file_type, submitted_at')
+        .select('id, artist_name, artist_age, artist_school, art_title, art_dimensions, art_description, artist_email, original_filename, file_url, file_type, submitted_at')
         .order('submitted_at', { ascending: false })
         .limit(1000),
       fetchFinalistMap(),
@@ -327,7 +329,7 @@ app.get('/api/admin/submissions.csv', requireAdmin, async (_req, res, next) => {
     const [submissionsRes, finalistMap] = await Promise.all([
       supabase
         .from('submissions')
-        .select('id, artist_name, artist_age, artist_school, art_title, art_dimensions, artist_email, original_filename, file_url, file_type, submitted_at')
+        .select('id, artist_name, artist_age, artist_school, art_title, art_dimensions, art_description, artist_email, original_filename, file_url, file_type, submitted_at')
         .order('submitted_at', { ascending: false })
         .limit(10000),
       fetchFinalistMap(),
@@ -342,6 +344,7 @@ app.get('/api/admin/submissions.csv', requireAdmin, async (_req, res, next) => {
       'artist_school',
       'art_title',
       'art_dimensions',
+      'art_description',
       'artist_email',
       'original_filename',
       'file_url',
@@ -357,6 +360,7 @@ app.get('/api/admin/submissions.csv', requireAdmin, async (_req, res, next) => {
       row.artist_school || '',
       row.art_title,
       row.art_dimensions || '',
+      row.art_description || '',
       row.artist_email,
       row.original_filename,
       row.file_url,
@@ -435,11 +439,12 @@ app.post('/api/submissions', checkSubmissionRateLimit, upload.single('artFile'),
     const artistSchool = String(req.body.artistSchool || '').trim();
     const artTitle = String(req.body.artTitle || '').trim();
     const artDimensions = String(req.body.artDimensions || '').trim();
+    const artDescription = String(req.body.artDescription || '').trim();
     const artistEmail = String(req.body.artistEmail || '').trim();
 
-    if (!artistName || !artistSchool || !Number.isInteger(artistAge) || !artTitle || !artDimensions || !artistEmail || !req.file) {
+    if (!artistName || !artistSchool || !Number.isInteger(artistAge) || !artTitle || !artDimensions || !artDescription || !artistEmail || !req.file) {
       return res.status(400).json({
-        error: 'artistName, artistAge, artistSchool, artTitle, artDimensions, artistEmail, and artFile are required.',
+        error: 'artistName, artistAge, artistSchool, artTitle, artDimensions, artDescription, artistEmail, and artFile are required.',
       });
     }
     if (artistAge < 15 || artistAge > 19) {
@@ -474,6 +479,7 @@ app.post('/api/submissions', checkSubmissionRateLimit, upload.single('artFile'),
       artist_school: artistSchool,
       art_title: artTitle,
       art_dimensions: artDimensions,
+      art_description: artDescription,
       artist_email: artistEmail,
       original_filename: req.file.originalname,
       file_url: publicUrlData.publicUrl,
@@ -483,7 +489,7 @@ app.post('/api/submissions', checkSubmissionRateLimit, upload.single('artFile'),
     const { data: inserted, error: insertError } = await supabase
       .from('submissions')
       .insert(record)
-      .select('id, artist_name, artist_age, artist_school, art_title, art_dimensions, artist_email, original_filename, file_url, file_type, submitted_at')
+      .select('id, artist_name, artist_age, artist_school, art_title, art_dimensions, art_description, artist_email, original_filename, file_url, file_type, submitted_at')
       .single();
 
     if (insertError) {

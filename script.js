@@ -114,6 +114,7 @@ function renderSubmissionCards(submissions) {
         <small>by ${submission.artistName}</small>
         ${(submission.artistAge || submission.artistSchool) ? `<small>Age ${submission.artistAge || '-'} | ${submission.artistSchool || '-'}</small>` : ''}
         ${submission.artDimensions ? `<small>${submission.artDimensions}</small>` : ''}
+        ${submission.artDescription ? `<small>${submission.artDescription}</small>` : ''}
         <small>${dateLabel}</small>
         ${submission.finalistTier ? `<small class="submission-badge">${submission.finalistTier}</small>` : ''}
         <a href="${submission.fileUrl}" target="_blank" rel="noopener">View File</a>
@@ -147,6 +148,7 @@ function renderFinalistCards(submissions) {
         <small>by ${submission.artistName}</small>
         ${(submission.artistAge || submission.artistSchool) ? `<small>Age ${submission.artistAge || '-'} | ${submission.artistSchool || '-'}</small>` : ''}
         ${submission.artDimensions ? `<small>${submission.artDimensions}</small>` : ''}
+        ${submission.artDescription ? `<small>${submission.artDescription}</small>` : ''}
         <small>${dateLabel}</small>
         <small class="submission-badge">${submission.finalistTier || 'Finalist'}</small>
         <a href="${submission.fileUrl}" target="_blank" rel="noopener">View File</a>
@@ -193,6 +195,7 @@ if (submissionForm && submissionStatus) {
     const artistEmail = String(formData.get('artistEmail') || '').trim();
     const artTitle = String(formData.get('artTitle') || '').trim();
     const artDimensions = String(formData.get('artDimensions') || '').trim();
+    const artDescription = String(formData.get('artDescription') || '').trim();
     const artFile = formData.get('artFile');
 
     if (
@@ -202,6 +205,7 @@ if (submissionForm && submissionStatus) {
       !artistEmail ||
       !artTitle ||
       !artDimensions ||
+      !artDescription ||
       !(artFile instanceof File) ||
       artFile.size === 0
     ) {
