@@ -112,6 +112,7 @@ function renderSubmissionCards(submissions) {
       <div class="submission-meta">
         <strong>${submission.artTitle}</strong>
         <small>by ${submission.artistName}</small>
+        ${(submission.artistAge || submission.artistSchool) ? `<small>Age ${submission.artistAge || '-'} | ${submission.artistSchool || '-'}</small>` : ''}
         ${submission.artDimensions ? `<small>${submission.artDimensions}</small>` : ''}
         <small>${dateLabel}</small>
         ${submission.finalistTier ? `<small class="submission-badge">${submission.finalistTier}</small>` : ''}
@@ -144,6 +145,7 @@ function renderFinalistCards(submissions) {
       <div class="submission-meta">
         <strong>${submission.artTitle}</strong>
         <small>by ${submission.artistName}</small>
+        ${(submission.artistAge || submission.artistSchool) ? `<small>Age ${submission.artistAge || '-'} | ${submission.artistSchool || '-'}</small>` : ''}
         ${submission.artDimensions ? `<small>${submission.artDimensions}</small>` : ''}
         <small>${dateLabel}</small>
         <small class="submission-badge">${submission.finalistTier || 'Finalist'}</small>
@@ -186,13 +188,30 @@ if (submissionForm && submissionStatus) {
 
     const formData = new FormData(submissionForm);
     const artistName = String(formData.get('artistName') || '').trim();
+    const artistAge = Number.parseInt(String(formData.get('artistAge') || ''), 10);
+    const artistSchool = String(formData.get('artistSchool') || '').trim();
     const artistEmail = String(formData.get('artistEmail') || '').trim();
     const artTitle = String(formData.get('artTitle') || '').trim();
     const artDimensions = String(formData.get('artDimensions') || '').trim();
     const artFile = formData.get('artFile');
 
-    if (!artistName || !artistEmail || !artTitle || !artDimensions || !(artFile instanceof File) || artFile.size === 0) {
+    if (
+      !artistName ||
+      !artistSchool ||
+      !Number.isInteger(artistAge) ||
+      !artistEmail ||
+      !artTitle ||
+      !artDimensions ||
+      !(artFile instanceof File) ||
+      artFile.size === 0
+    ) {
       submissionStatus.textContent = 'Please complete all fields and choose a file.';
+      submissionStatus.className = 'form-status error';
+      return;
+    }
+
+    if (artistAge < 15 || artistAge > 19) {
+      submissionStatus.textContent = 'Age must be between 15 and 19.';
       submissionStatus.className = 'form-status error';
       return;
     }

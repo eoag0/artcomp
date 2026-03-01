@@ -33,6 +33,8 @@
               <tr>
                 <th>Submitted</th>
                 <th>Artist</th>
+                <th>Age</th>
+                <th>School</th>
                 <th>Email</th>
                 <th>Title</th>
                 <th>Dimensions</th>
@@ -41,7 +43,7 @@
               </tr>
             </thead>
             <tbody id="admin-tbody">
-              <tr><td colspan="7">Enter token and click "Load Submissions".</td></tr>
+              <tr><td colspan="9">Enter token and click "Load Submissions".</td></tr>
             </tbody>
           </table>
         </div>
@@ -73,7 +75,7 @@
 
     function renderRows(submissions) {
       if (!Array.isArray(submissions) || submissions.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="7">No submissions found.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="9">No submissions found.</td></tr>';
         return;
       }
 
@@ -87,6 +89,8 @@
           <tr>
             <td>${escapeHtml(dateLabel)}</td>
             <td>${escapeHtml(item.artistName)}</td>
+            <td>${escapeHtml(item.artistAge)}</td>
+            <td>${escapeHtml(item.artistSchool)}</td>
             <td>${escapeHtml(item.artistEmail)}</td>
             <td>${escapeHtml(item.artTitle)}</td>
             <td>${escapeHtml(item.artDimensions)}</td>

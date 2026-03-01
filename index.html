@@ -127,7 +127,7 @@
         <div class="cards-3">
           <article class="info-card">
             <h3>Who</h3>
-            <p>Asian American youth artists, ages 15-19, from public, private, charter, and homeschool communities statewide.</p>
+            <p>Asian American youth artists, ages 15-19, from communities and schools statewide.</p>
           </article>
           <article class="info-card">
             <h3>What</h3>
@@ -192,6 +192,12 @@
           <form id="submission-form" class="upload-form" novalidate>
             <label for="artist-name">Artist Name</label>
             <input id="artist-name" name="artistName" type="text" placeholder="Your full name" required />
+
+            <label for="artist-age">Age</label>
+            <input id="artist-age" name="artistAge" type="number" min="15" max="19" placeholder="15-19" required />
+
+            <label for="artist-school">School</label>
+            <input id="artist-school" name="artistSchool" type="text" placeholder="Your school name" required />
 
             <label for="artist-email">Artist Email</label>
             <input id="artist-email" name="artistEmail" type="email" placeholder="you@example.com" required />
