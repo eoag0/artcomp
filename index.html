@@ -72,10 +72,6 @@
             <ellipse cx="245" cy="115" rx="58" ry="38" transform="rotate(45 245 115)" fill="url(#petalGrad)"></ellipse>
             <ellipse cx="115" cy="245" rx="58" ry="38" transform="rotate(45 115 245)" fill="url(#petalGrad)"></ellipse>
           </svg>
-          <div class="stat-bubble" data-target="25">
-            <strong><span class="count">0</span>%+</strong>
-            <small>local Asian American representation in the community</small>
-          </div>
           <div class="stat-bubble" data-target="50">
             <strong><span class="count">0</span></strong>
             <small>finalist works selected by judges</small>
@@ -92,7 +88,7 @@
       <div class="container">
         <h2>About Asian Blooming Artists</h2>
         <p class="section-intro">
-          Founded by a North Carolina high school student, Asian Blooming Artists is a nonprofit-led initiative focused on youth expression, cultural understanding, and community connection through visual art.
+          Founded by Carter Yao, a North Carolina high school student, Asian Blooming Artists is a nonprofit-led initiative focused on youth expression, cultural understanding, and community connection through visual art.
         </p>
         <div class="about-grid">
           <article class="panel">
@@ -140,6 +136,13 @@
           <article class="info-card">
             <h3>How</h3>
             <p>A professional jury selects finalists (30-50 works), followed by public voting to determine multiple award tiers.</p>
+          </article>
+        </div>
+
+        <div class="cards-3">
+          <article class="info-card">
+            <h3>Why</h3>
+            <p>Asian Americans make up more than 25% of Cary's population. This showcase amplifies youth voices through art during AAPI Heritage Month and invites the public to participate in community-centered cultural celebration.</p>
           </article>
         </div>
 
@@ -195,6 +198,9 @@
 
             <label for="art-title">Artwork Title</label>
             <input id="art-title" name="artTitle" type="text" placeholder="Title of your piece" required />
+
+            <label for="art-dimensions">Dimensions (L x W x H in inches)</label>
+            <input id="art-dimensions" name="artDimensions" type="text" placeholder='Example: 24 x 18 x 2 in' required />
 
             <label for="art-file">Upload Artwork</label>
             <input id="art-file" name="artFile" type="file" accept="image/*,.pdf" required />

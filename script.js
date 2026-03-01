@@ -112,6 +112,7 @@ function renderSubmissionCards(submissions) {
       <div class="submission-meta">
         <strong>${submission.artTitle}</strong>
         <small>by ${submission.artistName}</small>
+        ${submission.artDimensions ? `<small>${submission.artDimensions}</small>` : ''}
         <small>${dateLabel}</small>
         ${submission.finalistTier ? `<small class="submission-badge">${submission.finalistTier}</small>` : ''}
         <a href="${submission.fileUrl}" target="_blank" rel="noopener">View File</a>
@@ -143,6 +144,7 @@ function renderFinalistCards(submissions) {
       <div class="submission-meta">
         <strong>${submission.artTitle}</strong>
         <small>by ${submission.artistName}</small>
+        ${submission.artDimensions ? `<small>${submission.artDimensions}</small>` : ''}
         <small>${dateLabel}</small>
         <small class="submission-badge">${submission.finalistTier || 'Finalist'}</small>
         <a href="${submission.fileUrl}" target="_blank" rel="noopener">View File</a>
@@ -186,9 +188,10 @@ if (submissionForm && submissionStatus) {
     const artistName = String(formData.get('artistName') || '').trim();
     const artistEmail = String(formData.get('artistEmail') || '').trim();
     const artTitle = String(formData.get('artTitle') || '').trim();
+    const artDimensions = String(formData.get('artDimensions') || '').trim();
     const artFile = formData.get('artFile');
 
-    if (!artistName || !artistEmail || !artTitle || !(artFile instanceof File) || artFile.size === 0) {
+    if (!artistName || !artistEmail || !artTitle || !artDimensions || !(artFile instanceof File) || artFile.size === 0) {
       submissionStatus.textContent = 'Please complete all fields and choose a file.';
       submissionStatus.className = 'form-status error';
       return;
@@ -230,7 +233,7 @@ if (submissionForm && submissionStatus) {
 }
 
 if (contactForm && statusNode) {
-  contactForm.addEventListener('submit', (event) => {
+  contactForm.addEventListener('submit', async (event) => {
     event.preventDefault();
     const formData = new FormData(contactForm);
 
@@ -252,9 +255,37 @@ if (contactForm && statusNode) {
       return;
     }
 
-    statusNode.textContent = 'Message sent successfully. Our team will follow up soon.';
-    statusNode.className = 'form-status success';
-    contactForm.reset();
+    const submitBtn = contactForm.querySelector('button[type="submit"]');
+    if (submitBtn) submitBtn.disabled = true;
+
+    try {
+      const response = await fetch('/api/contact', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          name,
+          email,
+          subject,
+          message,
+        }),
+      });
+
+      const payload = await response.json();
+      if (!response.ok) {
+        throw new Error(payload.error || 'Could not send your message right now.');
+      }
+
+      statusNode.textContent = 'Message sent successfully. Our team will follow up soon.';
+      statusNode.className = 'form-status success';
+      contactForm.reset();
+    } catch (error) {
+      statusNode.textContent = error.message || 'Could not send your message right now.';
+      statusNode.className = 'form-status error';
+    } finally {
+      if (submitBtn) submitBtn.disabled = false;
+    }
   });
 }
 

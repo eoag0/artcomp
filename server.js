@@ -1,6 +1,7 @@
 ﻿const express = require('express');
 const multer = require('multer');
 const path = require('path');
+const nodemailer = require('nodemailer');
 const { createClient } = require('@supabase/supabase-js');
 
 const app = express();
@@ -12,6 +13,13 @@ const supabaseBucket = process.env.SUPABASE_BUCKET || 'art-submissions';
 const adminToken = process.env.ADMIN_TOKEN || '';
 const rateLimitWindowMs = Number.parseInt(process.env.RATE_LIMIT_WINDOW_MS || '600000', 10);
 const rateLimitMax = Number.parseInt(process.env.RATE_LIMIT_MAX || '8', 10);
+const smtpHost = process.env.SMTP_HOST || '';
+const smtpPort = Number.parseInt(process.env.SMTP_PORT || '587', 10);
+const smtpSecure = String(process.env.SMTP_SECURE || 'false').toLowerCase() === 'true';
+const smtpUser = process.env.SMTP_USER || '';
+const smtpPass = process.env.SMTP_PASS || '';
+const contactTo = process.env.CONTACT_TO || 'asianbartists@gmail.com';
+const contactFrom = process.env.CONTACT_FROM || smtpUser || 'no-reply@asianbloomingartists.org';
 
 if (!supabaseUrl || !supabaseServiceRoleKey) {
   // eslint-disable-next-line no-console
@@ -21,6 +29,18 @@ if (!supabaseUrl || !supabaseServiceRoleKey) {
 
 const supabase = createClient(supabaseUrl, supabaseServiceRoleKey);
 const submissionHitsByIp = new Map();
+const contactHitsByIp = new Map();
+const mailTransporter = smtpHost && smtpUser && smtpPass
+  ? nodemailer.createTransport({
+    host: smtpHost,
+    port: smtpPort,
+    secure: smtpSecure,
+    auth: {
+      user: smtpUser,
+      pass: smtpPass,
+    },
+  })
+  : null;
 
 const allowedMime = new Set([
   'image/jpeg',
@@ -78,6 +98,23 @@ function checkSubmissionRateLimit(req, res, next) {
   next();
 }
 
+function checkContactRateLimit(req, res, next) {
+  const ip = getClientIp(req);
+  const now = Date.now();
+  const earliestAllowed = now - rateLimitWindowMs;
+  const recentHits = (contactHitsByIp.get(ip) || []).filter((ts) => ts > earliestAllowed);
+
+  if (recentHits.length >= rateLimitMax) {
+    return res.status(429).json({
+      error: 'Too many contact messages right now. Please wait a few minutes before trying again.',
+    });
+  }
+
+  recentHits.push(now);
+  contactHitsByIp.set(ip, recentHits);
+  next();
+}
+
 function requireAdmin(req, res, next) {
   if (!adminToken) {
     return res.status(503).json({ error: 'ADMIN_TOKEN is not configured on the server.' });
@@ -96,6 +133,7 @@ function toPublicSubmission(row) {
     id: row.id,
     artistName: row.artist_name,
     artTitle: row.art_title,
+    artDimensions: row.art_dimensions || null,
     originalFilename: row.original_filename,
     fileUrl: row.file_url,
     fileType: row.file_type,
@@ -109,6 +147,7 @@ function toAdminSubmission(row) {
     id: row.id,
     artistName: row.artist_name,
     artTitle: row.art_title,
+    artDimensions: row.art_dimensions || null,
     artistEmail: row.artist_email,
     originalFilename: row.original_filename,
     fileUrl: row.file_url,
@@ -147,12 +186,53 @@ app.get('/api/health', (_req, res) => {
   res.json({ ok: true });
 });
 
+app.post('/api/contact', checkContactRateLimit, async (req, res, next) => {
+  try {
+    const name = String(req.body.name || '').trim();
+    const email = String(req.body.email || '').trim();
+    const subject = String(req.body.subject || '').trim();
+    const message = String(req.body.message || '').trim();
+
+    if (!name || !email || !subject || !message) {
+      return res.status(400).json({ error: 'name, email, subject, and message are required.' });
+    }
+
+    const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailPattern.test(email)) {
+      return res.status(400).json({ error: 'Please provide a valid email.' });
+    }
+
+    if (!mailTransporter) {
+      return res.status(503).json({ error: 'Contact email is not configured on the server.' });
+    }
+
+    await mailTransporter.sendMail({
+      from: contactFrom,
+      to: contactTo,
+      replyTo: email,
+      subject: `ABA Contact: ${subject}`,
+      text: `Name: ${name}\nEmail: ${email}\nSubject: ${subject}\n\nMessage:\n${message}`,
+      html: `
+        <p><strong>Name:</strong> ${name}</p>
+        <p><strong>Email:</strong> ${email}</p>
+        <p><strong>Subject:</strong> ${subject}</p>
+        <p><strong>Message:</strong></p>
+        <p>${message.replace(/\n/g, '<br />')}</p>
+      `,
+    });
+
+    return res.status(201).json({ message: 'Message sent successfully.' });
+  } catch (error) {
+    next(error);
+  }
+});
+
 app.get('/api/submissions', async (_req, res, next) => {
   try {
     const [submissionsRes, finalistMap] = await Promise.all([
       supabase
         .from('submissions')
-        .select('id, artist_name, art_title, original_filename, file_url, file_type, submitted_at')
+        .select('id, artist_name, art_title, art_dimensions, original_filename, file_url, file_type, submitted_at')
         .order('submitted_at', { ascending: false })
         .limit(50),
       fetchFinalistMap(),
@@ -190,7 +270,7 @@ app.get('/api/finalists', async (_req, res, next) => {
 
     const { data: submissionRows, error: submissionsError } = await supabase
       .from('submissions')
-      .select('id, artist_name, art_title, original_filename, file_url, file_type, submitted_at')
+      .select('id, artist_name, art_title, art_dimensions, original_filename, file_url, file_type, submitted_at')
       .in('id', ids);
 
     if (submissionsError) throw new Error(submissionsError.message);
@@ -219,7 +299,7 @@ app.get('/api/admin/submissions', requireAdmin, async (_req, res, next) => {
     const [submissionsRes, finalistMap] = await Promise.all([
       supabase
         .from('submissions')
-        .select('id, artist_name, art_title, artist_email, original_filename, file_url, file_type, submitted_at')
+        .select('id, artist_name, art_title, art_dimensions, artist_email, original_filename, file_url, file_type, submitted_at')
         .order('submitted_at', { ascending: false })
         .limit(1000),
       fetchFinalistMap(),
@@ -243,7 +323,7 @@ app.get('/api/admin/submissions.csv', requireAdmin, async (_req, res, next) => {
     const [submissionsRes, finalistMap] = await Promise.all([
       supabase
         .from('submissions')
-        .select('id, artist_name, art_title, artist_email, original_filename, file_url, file_type, submitted_at')
+        .select('id, artist_name, art_title, art_dimensions, artist_email, original_filename, file_url, file_type, submitted_at')
         .order('submitted_at', { ascending: false })
         .limit(10000),
       fetchFinalistMap(),
@@ -255,6 +335,7 @@ app.get('/api/admin/submissions.csv', requireAdmin, async (_req, res, next) => {
       'id',
       'artist_name',
       'art_title',
+      'art_dimensions',
       'artist_email',
       'original_filename',
       'file_url',
@@ -267,6 +348,7 @@ app.get('/api/admin/submissions.csv', requireAdmin, async (_req, res, next) => {
       row.id,
       row.artist_name,
       row.art_title,
+      row.art_dimensions || '',
       row.artist_email,
       row.original_filename,
       row.file_url,
@@ -342,11 +424,12 @@ app.post('/api/submissions', checkSubmissionRateLimit, upload.single('artFile'),
 
     const artistName = String(req.body.artistName || '').trim();
     const artTitle = String(req.body.artTitle || '').trim();
+    const artDimensions = String(req.body.artDimensions || '').trim();
     const artistEmail = String(req.body.artistEmail || '').trim();
 
-    if (!artistName || !artTitle || !artistEmail || !req.file) {
+    if (!artistName || !artTitle || !artDimensions || !artistEmail || !req.file) {
       return res.status(400).json({
-        error: 'artistName, artTitle, artistEmail, and artFile are required.',
+        error: 'artistName, artTitle, artDimensions, artistEmail, and artFile are required.',
       });
     }
 
@@ -375,6 +458,7 @@ app.post('/api/submissions', checkSubmissionRateLimit, upload.single('artFile'),
     const record = {
       artist_name: artistName,
       art_title: artTitle,
+      art_dimensions: artDimensions,
       artist_email: artistEmail,
       original_filename: req.file.originalname,
       file_url: publicUrlData.publicUrl,
@@ -384,7 +468,7 @@ app.post('/api/submissions', checkSubmissionRateLimit, upload.single('artFile'),
     const { data: inserted, error: insertError } = await supabase
       .from('submissions')
       .insert(record)
-      .select('id, artist_name, art_title, artist_email, original_filename, file_url, file_type, submitted_at')
+      .select('id, artist_name, art_title, art_dimensions, artist_email, original_filename, file_url, file_type, submitted_at')
       .single();
 
     if (insertError) {

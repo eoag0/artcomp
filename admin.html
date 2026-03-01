@@ -35,12 +35,13 @@
                 <th>Artist</th>
                 <th>Email</th>
                 <th>Title</th>
+                <th>Dimensions</th>
                 <th>Tag</th>
                 <th>File</th>
               </tr>
             </thead>
             <tbody id="admin-tbody">
-              <tr><td colspan="6">Enter token and click "Load Submissions".</td></tr>
+              <tr><td colspan="7">Enter token and click "Load Submissions".</td></tr>
             </tbody>
           </table>
         </div>
@@ -72,7 +73,7 @@
 
     function renderRows(submissions) {
       if (!Array.isArray(submissions) || submissions.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="6">No submissions found.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="7">No submissions found.</td></tr>';
         return;
       }
 
@@ -88,6 +89,7 @@
             <td>${escapeHtml(item.artistName)}</td>
             <td>${escapeHtml(item.artistEmail)}</td>
             <td>${escapeHtml(item.artTitle)}</td>
+            <td>${escapeHtml(item.artDimensions)}</td>
             <td>
               ${tagLabel}
               <div class="admin-tag-controls">
