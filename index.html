@@ -23,6 +23,7 @@
         <li><a href="#competition">Competition</a></li>
         <li><a href="#gallery">Gallery</a></li>
         <li><a href="#finalists">Finalists</a></li>
+        <li><a href="#voting">Voting</a></li>
         <li><a href="#involved">Get Involved</a></li>
         <li><a href="#contact">Contact</a></li>
       </ul>
@@ -220,12 +221,31 @@
     <section id="finalists" class="section competition">
       <div class="container">
         <h2>Finalists & Winners</h2>
-        <p class="section-intro">Tagged submissions selected by the organizing team appear here.</p>
+        <p class="section-intro">Tagged submissions selected by the organizing team appear here. Each entry includes a reference number for voting.</p>
         <div class="gallery-grid finalist-grid" id="finalists-grid" aria-label="Finalist and winner submissions">
           <article class="art-slot">
             <span>Finalist selections will appear here.</span>
           </article>
         </div>
+      </div>
+    </section>
+
+    <section id="voting" class="section">
+      <div class="container">
+        <h2>Public Voting</h2>
+        <p class="section-intro">Vote once using your email and the finalist reference number (example: ABA-0001).</p>
+        <form id="voting-form" class="contact-form" novalidate>
+          <div class="field-row">
+            <label for="voter-email">Your Email</label>
+            <input id="voter-email" name="voterEmail" type="email" required />
+          </div>
+          <div class="field-row">
+            <label for="reference-number">Finalist Reference Number</label>
+            <input id="reference-number" name="referenceNumber" type="text" placeholder="ABA-0001" required />
+          </div>
+          <button type="submit" class="btn btn-primary">Submit Vote</button>
+          <p class="form-status" id="voting-status" role="status" aria-live="polite"></p>
+        </form>
       </div>
     </section>
 
@@ -264,6 +284,7 @@
         <li><a href="#competition">Competition</a></li>
         <li><a href="#gallery">Gallery</a></li>
         <li><a href="#finalists">Finalists</a></li>
+        <li><a href="#voting">Voting</a></li>
         <li><a href="#involved">Get Involved</a></li>
         <li><a href="#contact">Contact</a></li>
         <li><a href="/admin.html">Admin</a></li>

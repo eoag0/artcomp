@@ -10,6 +10,8 @@ const submissionForm = document.getElementById('submission-form');
 const submissionStatus = document.getElementById('submission-status');
 const galleryGrid = document.getElementById('gallery-grid');
 const finalistsGrid = document.getElementById('finalists-grid');
+const votingForm = document.getElementById('voting-form');
+const votingStatus = document.getElementById('voting-status');
 
 if (navToggle && navLinksContainer) {
   navToggle.addEventListener('click', () => {
@@ -111,6 +113,7 @@ function renderSubmissionCards(submissions) {
     article.innerHTML = `
       <div class="submission-meta">
         <strong>${submission.artTitle}</strong>
+        ${submission.referenceNumber ? `<small class="submission-badge">Ref ${submission.referenceNumber}</small>` : ''}
         <small>by ${submission.artistName}</small>
         ${(submission.artistAge || submission.artistSchool) ? `<small>Age ${submission.artistAge || '-'} | ${submission.artistSchool || '-'}</small>` : ''}
         ${submission.artDimensions ? `<small>${submission.artDimensions}</small>` : ''}
@@ -145,6 +148,7 @@ function renderFinalistCards(submissions) {
     article.innerHTML = `
       <div class="submission-meta">
         <strong>${submission.artTitle}</strong>
+        ${submission.referenceNumber ? `<small class="submission-badge">Ref ${submission.referenceNumber}</small>` : ''}
         <small>by ${submission.artistName}</small>
         ${(submission.artistAge || submission.artistSchool) ? `<small>Age ${submission.artistAge || '-'} | ${submission.artistSchool || '-'}</small>` : ''}
         ${submission.artDimensions ? `<small>${submission.artDimensions}</small>` : ''}
@@ -306,6 +310,58 @@ if (contactForm && statusNode) {
     } catch (error) {
       statusNode.textContent = error.message || 'Could not send your message right now.';
       statusNode.className = 'form-status error';
+    } finally {
+      if (submitBtn) submitBtn.disabled = false;
+    }
+  });
+}
+
+if (votingForm && votingStatus) {
+  votingForm.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    votingStatus.textContent = '';
+    votingStatus.className = 'form-status';
+
+    const formData = new FormData(votingForm);
+    const email = String(formData.get('voterEmail') || '').trim();
+    const referenceNumber = String(formData.get('referenceNumber') || '').trim().toUpperCase();
+
+    if (!email || !referenceNumber) {
+      votingStatus.textContent = 'Please enter both email and reference number.';
+      votingStatus.className = 'form-status error';
+      return;
+    }
+
+    const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailPattern.test(email)) {
+      votingStatus.textContent = 'Please enter a valid email address.';
+      votingStatus.className = 'form-status error';
+      return;
+    }
+
+    const submitBtn = votingForm.querySelector('button[type="submit"]');
+    if (submitBtn) submitBtn.disabled = true;
+
+    try {
+      const response = await fetch('/api/votes', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ email, referenceNumber }),
+      });
+
+      const payload = await response.json();
+      if (!response.ok) {
+        throw new Error(payload.error || 'Vote submission failed.');
+      }
+
+      votingStatus.textContent = 'Vote submitted. Thank you for participating.';
+      votingStatus.className = 'form-status success';
+      votingForm.reset();
+    } catch (error) {
+      votingStatus.textContent = error.message || 'Could not submit vote.';
+      votingStatus.className = 'form-status error';
     } finally {
       if (submitBtn) submitBtn.disabled = false;
     }

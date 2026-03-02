@@ -131,6 +131,7 @@ function requireAdmin(req, res, next) {
 function toPublicSubmission(row) {
   return {
     id: row.id,
+    referenceNumber: `ABA-${String(row.id).padStart(4, '0')}`,
     artistName: row.artist_name,
     artistAge: row.artist_age ?? null,
     artistSchool: row.artist_school || null,
@@ -148,6 +149,7 @@ function toPublicSubmission(row) {
 function toAdminSubmission(row) {
   return {
     id: row.id,
+    referenceNumber: `ABA-${String(row.id).padStart(4, '0')}`,
     artistName: row.artist_name,
     artistAge: row.artist_age ?? null,
     artistSchool: row.artist_school || null,
@@ -190,6 +192,63 @@ app.use(express.static(__dirname));
 
 app.get('/api/health', (_req, res) => {
   res.json({ ok: true });
+});
+
+app.post('/api/votes', checkContactRateLimit, async (req, res, next) => {
+  try {
+    const voterEmail = String(req.body.email || '').trim().toLowerCase();
+    const rawReference = String(req.body.referenceNumber || '').trim().toUpperCase();
+
+    if (!voterEmail || !rawReference) {
+      return res.status(400).json({ error: 'email and referenceNumber are required.' });
+    }
+
+    const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailPattern.test(voterEmail)) {
+      return res.status(400).json({ error: 'Please provide a valid email.' });
+    }
+
+    let submissionId = Number.parseInt(rawReference, 10);
+    if (Number.isNaN(submissionId)) {
+      const refMatch = rawReference.match(/^ABA-(\d{1,10})$/);
+      if (!refMatch) {
+        return res.status(400).json({ error: 'Reference number must look like ABA-0001.' });
+      }
+      submissionId = Number.parseInt(refMatch[1], 10);
+    }
+
+    if (!Number.isInteger(submissionId) || submissionId <= 0) {
+      return res.status(400).json({ error: 'Invalid reference number.' });
+    }
+
+    const { data: finalistRow, error: finalistError } = await supabase
+      .from('finalists')
+      .select('submission_id')
+      .eq('submission_id', submissionId)
+      .maybeSingle();
+
+    if (finalistError) throw new Error(finalistError.message);
+    if (!finalistRow) {
+      return res.status(404).json({ error: 'That reference number is not an active finalist.' });
+    }
+
+    const { error: voteError } = await supabase.from('votes').insert({
+      voter_email: voterEmail,
+      submission_id: submissionId,
+      voted_at: new Date().toISOString(),
+    });
+
+    if (voteError) {
+      if (voteError.code === '23505') {
+        return res.status(409).json({ error: 'This email has already voted.' });
+      }
+      throw new Error(voteError.message);
+    }
+
+    return res.status(201).json({ message: 'Vote submitted successfully.' });
+  } catch (error) {
+    next(error);
+  }
 });
 
 app.post('/api/contact', checkContactRateLimit, async (req, res, next) => {
