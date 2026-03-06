@@ -197,13 +197,17 @@
             <label for="art-title">Artwork Title</label>
             <input id="art-title" name="artTitle" type="text" placeholder="Title of your piece" required />
 
-            <label for="art-dimensions">Dimensions (L x W x H in inches)</label>
-            <input id="art-dimensions" name="artDimensions" type="text" placeholder='Example: 24 x 18 x 2 in' required />
+            <label>Dimensions (inches)</label>
+            <div class="dimension-row">
+              <input id="art-length" name="artLength" type="number" min="0.1" step="0.1" placeholder="L" required />
+              <input id="art-width" name="artWidth" type="number" min="0.1" step="0.1" placeholder="W" required />
+              <input id="art-height" name="artHeight" type="number" min="0.1" step="0.1" placeholder="H (3D only)" disabled />
+            </div>
             <label class="checkbox-row" for="is-3d">
               <input id="is-3d" name="is3D" type="checkbox" />
               This artwork is 3D (pottery, sculpture)
             </label>
-            <p class="form-note">For 2D artwork, maximum size is 40 x 40 inches.</p>
+            <p class="form-note">For 2D artwork, maximum size is 40 x 40 inches (L and W). Height is only used for 3D works.</p>
 
             <label for="art-description">Brief description of piece</label>
             <textarea id="art-description" name="artDescription" rows="4" placeholder="Share the concept, inspiration, or meaning of your work." required></textarea>

@@ -550,27 +550,52 @@ app.post('/api/submissions', checkSubmissionRateLimit, upload.single('artFile'),
     const artistAge = Number.parseInt(String(req.body.artistAge || ''), 10);
     const artistSchool = String(req.body.artistSchool || '').trim();
     const artTitle = String(req.body.artTitle || '').trim();
-    const artDimensions = String(req.body.artDimensions || '').trim();
+    const artLength = Number.parseFloat(String(req.body.artLength || ''));
+    const artWidth = Number.parseFloat(String(req.body.artWidth || ''));
+    const artHeight = Number.parseFloat(String(req.body.artHeight || ''));
+    const legacyArtDimensions = String(req.body.artDimensions || '').trim();
     const is3D = ['true', '1', 'on', 'yes'].includes(String(req.body.is3D || '').toLowerCase());
     const artDescription = String(req.body.artDescription || '').trim();
     const artistEmail = String(req.body.artistEmail || '').trim();
 
-    if (!artistName || !artistSchool || !Number.isInteger(artistAge) || !artTitle || !artDimensions || !artDescription || !artistEmail || !req.file) {
+    if (!artistName || !artistSchool || !Number.isInteger(artistAge) || !artTitle || !artDescription || !artistEmail || !req.file) {
       return res.status(400).json({
-        error: 'artistName, artistAge, artistSchool, artTitle, artDimensions, artDescription, artistEmail, and artFile are required.',
+        error: 'artistName, artistAge, artistSchool, artTitle, artDescription, artistEmail, and artFile are required.',
       });
     }
     if (artistAge < 15 || artistAge > 19) {
       return res.status(400).json({ error: 'artistAge must be between 15 and 19.' });
     }
-    if (!is3D) {
-      const dimensions = parseDimensionNumbers(artDimensions);
-      if (dimensions.length < 2) {
-        return res.status(400).json({ error: 'For 2D artwork, provide at least L x W dimensions in inches.' });
+
+    let normalizedDimensions = '';
+    if (Number.isFinite(artLength) && Number.isFinite(artWidth) && artLength > 0 && artWidth > 0) {
+      if (is3D) {
+        if (!Number.isFinite(artHeight) || artHeight <= 0) {
+          return res.status(400).json({ error: 'For 3D artwork, height is required and must be greater than 0.' });
+        }
+        normalizedDimensions = `${artLength} x ${artWidth} x ${artHeight} in`;
+      } else {
+        if (artLength > 40 || artWidth > 40) {
+          return res.status(400).json({ error: 'For 2D artwork, maximum size is 40 x 40 inches.' });
+        }
+        normalizedDimensions = `${artLength} x ${artWidth} in`;
       }
-      if (dimensions[0] > 40 || dimensions[1] > 40) {
-        return res.status(400).json({ error: 'For 2D artwork, maximum size is 40 x 40 inches.' });
+    } else if (legacyArtDimensions) {
+      // Backward compatibility for older clients still sending a free-text dimensions field.
+      const dimensions = parseDimensionNumbers(legacyArtDimensions);
+      if (!is3D) {
+        if (dimensions.length < 2) {
+          return res.status(400).json({ error: 'For 2D artwork, provide at least L x W dimensions in inches.' });
+        }
+        if (dimensions[0] > 40 || dimensions[1] > 40) {
+          return res.status(400).json({ error: 'For 2D artwork, maximum size is 40 x 40 inches.' });
+        }
+      } else if (dimensions.length < 3) {
+        return res.status(400).json({ error: 'For 3D artwork, provide L x W x H dimensions in inches.' });
       }
+      normalizedDimensions = legacyArtDimensions;
+    } else {
+      return res.status(400).json({ error: 'Please provide valid dimensions.' });
     }
 
     const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -600,7 +625,7 @@ app.post('/api/submissions', checkSubmissionRateLimit, upload.single('artFile'),
       artist_age: artistAge,
       artist_school: artistSchool,
       art_title: artTitle,
-      art_dimensions: artDimensions,
+      art_dimensions: normalizedDimensions,
       is_3d: is3D,
       art_description: artDescription,
       artist_email: artistEmail,

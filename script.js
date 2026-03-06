@@ -12,11 +12,10 @@ const galleryGrid = document.getElementById('gallery-grid');
 const finalistsGrid = document.getElementById('finalists-grid');
 const votingForm = document.getElementById('voting-form');
 const votingStatus = document.getElementById('voting-status');
-
-function parseDimensionNumbers(input) {
-  const matches = String(input || '').match(/\d+(\.\d+)?/g) || [];
-  return matches.map((part) => Number.parseFloat(part)).filter((value) => Number.isFinite(value));
-}
+const is3DInput = document.getElementById('is-3d');
+const artLengthInput = document.getElementById('art-length');
+const artWidthInput = document.getElementById('art-width');
+const artHeightInput = document.getElementById('art-height');
 
 if (navToggle && navLinksContainer) {
   navToggle.addEventListener('click', () => {
@@ -194,6 +193,17 @@ async function loadFinalists() {
 }
 
 if (submissionForm && submissionStatus) {
+  if (is3DInput && artHeightInput) {
+    const syncHeightState = () => {
+      const useHeight = is3DInput.checked;
+      artHeightInput.disabled = !useHeight;
+      artHeightInput.required = useHeight;
+      if (!useHeight) artHeightInput.value = '';
+    };
+    syncHeightState();
+    is3DInput.addEventListener('change', syncHeightState);
+  }
+
   submissionForm.addEventListener('submit', async (event) => {
     event.preventDefault();
     submissionStatus.textContent = '';
@@ -205,7 +215,9 @@ if (submissionForm && submissionStatus) {
     const artistSchool = String(formData.get('artistSchool') || '').trim();
     const artistEmail = String(formData.get('artistEmail') || '').trim();
     const artTitle = String(formData.get('artTitle') || '').trim();
-    const artDimensions = String(formData.get('artDimensions') || '').trim();
+    const artLength = Number.parseFloat(String(formData.get('artLength') || ''));
+    const artWidth = Number.parseFloat(String(formData.get('artWidth') || ''));
+    const artHeight = Number.parseFloat(String(formData.get('artHeight') || ''));
     const is3D = formData.get('is3D') === 'on';
     const artDescription = String(formData.get('artDescription') || '').trim();
     const artFile = formData.get('artFile');
@@ -216,7 +228,8 @@ if (submissionForm && submissionStatus) {
       !Number.isInteger(artistAge) ||
       !artistEmail ||
       !artTitle ||
-      !artDimensions ||
+      !Number.isFinite(artLength) ||
+      !Number.isFinite(artWidth) ||
       !artDescription ||
       !(artFile instanceof File) ||
       artFile.size === 0
@@ -232,18 +245,27 @@ if (submissionForm && submissionStatus) {
       return;
     }
 
-    if (!is3D) {
-      const dimensions = parseDimensionNumbers(artDimensions);
-      if (dimensions.length < 2) {
-        submissionStatus.textContent = 'For 2D artwork, include at least L x W dimensions in inches.';
+    if (artLength <= 0 || artWidth <= 0) {
+      submissionStatus.textContent = 'Length and width must be greater than 0.';
+      submissionStatus.className = 'form-status error';
+      return;
+    }
+
+    if (!is3D && (artLength > 40 || artWidth > 40)) {
+      submissionStatus.textContent = 'For 2D artwork, max size is 40 x 40 inches.';
+      submissionStatus.className = 'form-status error';
+      return;
+    }
+
+    if (is3D) {
+      if (!Number.isFinite(artHeight) || artHeight <= 0) {
+        submissionStatus.textContent = 'For 3D artwork, height is required and must be greater than 0.';
         submissionStatus.className = 'form-status error';
         return;
       }
-      if (dimensions[0] > 40 || dimensions[1] > 40) {
-        submissionStatus.textContent = 'For 2D artwork, max size is 40 x 40 inches.';
-        submissionStatus.className = 'form-status error';
-        return;
-      }
+      formData.set('artDimensions', `${artLength} x ${artWidth} x ${artHeight} in`);
+    } else {
+      formData.set('artDimensions', `${artLength} x ${artWidth} in`);
     }
 
     const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
