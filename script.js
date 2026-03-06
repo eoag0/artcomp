@@ -17,6 +17,51 @@ const artLengthInput = document.getElementById('art-length');
 const artWidthInput = document.getElementById('art-width');
 const artHeightInput = document.getElementById('art-height');
 
+function escapeHtml(value) {
+  return String(value || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function isImageSubmission(submission) {
+  if (typeof submission.fileType === 'string' && submission.fileType.startsWith('image/')) return true;
+  return /\.(png|jpe?g|webp|gif|avif)$/i.test(String(submission.fileUrl || ''));
+}
+
+function buildArtworkCard(submission, forcedBadge) {
+  const uploadedDate = new Date(submission.submittedAt);
+  const dateLabel = Number.isNaN(uploadedDate.getTime())
+    ? 'Unknown date'
+    : uploadedDate.toLocaleDateString();
+  const badge = forcedBadge || submission.finalistTier || '';
+  const preview = isImageSubmission(submission)
+    ? `<img src="${escapeHtml(submission.fileUrl)}" alt="${escapeHtml(submission.artTitle)} preview" loading="lazy" />`
+    : `<div class="file-preview">Preview unavailable</div>`;
+
+  return `
+    <article class="art-slot submission-card">
+      <div class="art-preview">
+        ${preview}
+      </div>
+      <div class="submission-meta">
+        <strong>${escapeHtml(submission.artTitle)}</strong>
+        ${submission.referenceNumber ? `<small class="submission-badge">Ref ${escapeHtml(submission.referenceNumber)}</small>` : ''}
+        <small>by ${escapeHtml(submission.artistName)}</small>
+        ${(submission.artistAge || submission.artistSchool) ? `<small>Age ${escapeHtml(submission.artistAge)} | ${escapeHtml(submission.artistSchool)}</small>` : ''}
+        ${submission.artDimensions ? `<small>${escapeHtml(submission.artDimensions)}</small>` : ''}
+        <small>${submission.is3D ? '3D artwork' : '2D artwork'}</small>
+        ${submission.artDescription ? `<small>${escapeHtml(submission.artDescription)}</small>` : ''}
+        <small>${escapeHtml(dateLabel)}</small>
+        ${badge ? `<small class="submission-badge">${escapeHtml(badge)}</small>` : ''}
+        <a href="${escapeHtml(submission.fileUrl)}" target="_blank" rel="noopener">View File</a>
+      </div>
+    </article>
+  `;
+}
+
 if (navToggle && navLinksContainer) {
   navToggle.addEventListener('click', () => {
     const expanded = navToggle.getAttribute('aria-expanded') === 'true';
@@ -102,34 +147,12 @@ statBubbles.forEach((bubble) => bubbleObserver.observe(bubble));
 function renderSubmissionCards(submissions) {
   if (!galleryGrid) return;
 
-  const dynamicCards = galleryGrid.querySelectorAll('.submission-card');
-  dynamicCards.forEach((card) => card.remove());
+  galleryGrid.innerHTML = '';
 
   submissions.slice(0, 8).forEach((submission) => {
-    const article = document.createElement('article');
-    article.className = 'art-slot submission-card';
-
-    const uploadedDate = new Date(submission.submittedAt);
-    const dateLabel = Number.isNaN(uploadedDate.getTime())
-      ? 'Unknown date'
-      : uploadedDate.toLocaleDateString();
-
-    article.innerHTML = `
-      <div class="submission-meta">
-        <strong>${submission.artTitle}</strong>
-        ${submission.referenceNumber ? `<small class="submission-badge">Ref ${submission.referenceNumber}</small>` : ''}
-        <small>by ${submission.artistName}</small>
-        ${(submission.artistAge || submission.artistSchool) ? `<small>Age ${submission.artistAge || '-'} | ${submission.artistSchool || '-'}</small>` : ''}
-        ${submission.artDimensions ? `<small>${submission.artDimensions}</small>` : ''}
-        <small>${submission.is3D ? '3D artwork' : '2D artwork'}</small>
-        ${submission.artDescription ? `<small>${submission.artDescription}</small>` : ''}
-        <small>${dateLabel}</small>
-        ${submission.finalistTier ? `<small class="submission-badge">${submission.finalistTier}</small>` : ''}
-        <a href="${submission.fileUrl}" target="_blank" rel="noopener">View File</a>
-      </div>
-    `;
-
-    galleryGrid.appendChild(article);
+    const article = document.createElement('div');
+    article.innerHTML = buildArtworkCard(submission, '');
+    galleryGrid.appendChild(article.firstElementChild);
   });
 }
 
@@ -143,28 +166,9 @@ function renderFinalistCards(submissions) {
   }
 
   submissions.forEach((submission) => {
-    const article = document.createElement('article');
-    article.className = 'art-slot submission-card';
-    const uploadedDate = new Date(submission.submittedAt);
-    const dateLabel = Number.isNaN(uploadedDate.getTime())
-      ? 'Unknown date'
-      : uploadedDate.toLocaleDateString();
-
-    article.innerHTML = `
-      <div class="submission-meta">
-        <strong>${submission.artTitle}</strong>
-        ${submission.referenceNumber ? `<small class="submission-badge">Ref ${submission.referenceNumber}</small>` : ''}
-        <small>by ${submission.artistName}</small>
-        ${(submission.artistAge || submission.artistSchool) ? `<small>Age ${submission.artistAge || '-'} | ${submission.artistSchool || '-'}</small>` : ''}
-        ${submission.artDimensions ? `<small>${submission.artDimensions}</small>` : ''}
-        <small>${submission.is3D ? '3D artwork' : '2D artwork'}</small>
-        ${submission.artDescription ? `<small>${submission.artDescription}</small>` : ''}
-        <small>${dateLabel}</small>
-        <small class="submission-badge">${submission.finalistTier || 'Finalist'}</small>
-        <a href="${submission.fileUrl}" target="_blank" rel="noopener">View File</a>
-      </div>
-    `;
-    finalistsGrid.appendChild(article);
+    const article = document.createElement('div');
+    article.innerHTML = buildArtworkCard(submission, submission.finalistTier || 'Finalist');
+    finalistsGrid.appendChild(article.firstElementChild);
   });
 }
 

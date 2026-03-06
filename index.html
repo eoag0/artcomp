@@ -165,7 +165,18 @@
     <section id="gallery" class="section gallery">
       <div class="container">
         <h2>Gallery & Submission Area</h2>
-        <p class="section-intro">Placeholder slots are ready for finalist works and an online submission system.</p>
+        <p class="section-intro">Finalists are featured first, followed by the full gallery submissions.</p>
+
+        <h3 id="finalists">Finalists & Winners</h3>
+        <p class="section-intro">Tagged submissions selected by the organizing team appear first. Hover a card to view full details.</p>
+        <div class="gallery-grid finalist-grid" id="finalists-grid" aria-label="Finalist and winner submissions">
+          <article class="art-slot">
+            <span>Finalist selections will appear here.</span>
+          </article>
+        </div>
+
+        <h3>All Submissions</h3>
+        <p class="section-intro">Recent submissions from participating artists across the state.</p>
 
         <div class="gallery-grid" id="gallery-grid" aria-label="Artwork placeholders and submissions">
           <article class="art-slot"><span>Artwork Slot 01</span></article>
@@ -223,18 +234,6 @@
             <p class="form-note">Accepted formats: JPG, PNG, WEBP, PDF. Maximum size: 10MB.</p>
             <p class="form-status" id="submission-status" role="status" aria-live="polite"></p>
           </form>
-        </div>
-      </div>
-    </section>
-
-    <section id="finalists" class="section competition">
-      <div class="container">
-        <h2>Finalists & Winners</h2>
-        <p class="section-intro">Tagged submissions selected by the organizing team appear here. Each entry includes a reference number for voting.</p>
-        <div class="gallery-grid finalist-grid" id="finalists-grid" aria-label="Finalist and winner submissions">
-          <article class="art-slot">
-            <span>Finalist selections will appear here.</span>
-          </article>
         </div>
       </div>
     </section>
