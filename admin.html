@@ -41,6 +41,7 @@
           <table class="admin-table" id="admin-table">
             <thead>
               <tr>
+                <th>Ref #</th>
                 <th>Submitted</th>
                 <th>Artist</th>
                 <th>Age</th>
@@ -52,11 +53,13 @@
                 <th>Description</th>
                 <th>Votes</th>
                 <th>Tag</th>
+                <th>File Name</th>
+                <th>File Type</th>
                 <th>File</th>
               </tr>
             </thead>
             <tbody id="admin-tbody">
-              <tr><td colspan="12">Enter token and click "Load Submissions".</td></tr>
+              <tr><td colspan="15">Enter token and click "Load Submissions".</td></tr>
             </tbody>
           </table>
         </div>
@@ -90,7 +93,7 @@
 
     function renderRows(submissions) {
       if (!Array.isArray(submissions) || submissions.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="12">No submissions found.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="15">No submissions found.</td></tr>';
         return;
       }
 
@@ -102,6 +105,7 @@
 
         return `
           <tr>
+            <td>${escapeHtml(item.referenceNumber)}</td>
             <td>${escapeHtml(dateLabel)}</td>
             <td>${escapeHtml(item.artistName)}</td>
             <td>${escapeHtml(item.artistAge)}</td>
@@ -120,6 +124,8 @@
                 <button type="button" class="btn btn-secondary admin-tag-btn" data-action="clear" data-id="${item.id}">Clear</button>
               </div>
             </td>
+            <td>${escapeHtml(item.originalFilename)}</td>
+            <td>${escapeHtml(item.fileType)}</td>
             <td><a href="${safeUrl}" target="_blank" rel="noopener">Open</a></td>
           </tr>
         `;
