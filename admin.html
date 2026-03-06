@@ -23,6 +23,16 @@
         <div class="admin-tools">
           <input id="admin-token" type="password" placeholder="Enter ADMIN_TOKEN" autocomplete="off" />
           <button id="load-btn" class="btn btn-primary" type="button">Load Submissions</button>
+          <select id="sort-by">
+            <option value="submitted">Sort: Newest</option>
+            <option value="votes">Sort: Most Votes</option>
+            <option value="title">Sort: Title</option>
+            <option value="artist">Sort: Artist</option>
+          </select>
+          <select id="sort-dir">
+            <option value="desc">Direction: Desc</option>
+            <option value="asc">Direction: Asc</option>
+          </select>
           <button id="export-btn" class="btn btn-secondary" type="button">Export CSV</button>
           <a class="btn btn-secondary" href="/">Back to Site</a>
         </div>
@@ -38,13 +48,15 @@
                 <th>Email</th>
                 <th>Title</th>
                 <th>Dimensions</th>
+                <th>3D</th>
                 <th>Description</th>
+                <th>Votes</th>
                 <th>Tag</th>
                 <th>File</th>
               </tr>
             </thead>
             <tbody id="admin-tbody">
-              <tr><td colspan="10">Enter token and click "Load Submissions".</td></tr>
+              <tr><td colspan="12">Enter token and click "Load Submissions".</td></tr>
             </tbody>
           </table>
         </div>
@@ -56,6 +68,8 @@
     const tokenInput = document.getElementById('admin-token');
     const loadBtn = document.getElementById('load-btn');
     const exportBtn = document.getElementById('export-btn');
+    const sortByInput = document.getElementById('sort-by');
+    const sortDirInput = document.getElementById('sort-dir');
     const statusNode = document.getElementById('admin-status');
     const tbody = document.getElementById('admin-tbody');
     let currentToken = '';
@@ -76,7 +90,7 @@
 
     function renderRows(submissions) {
       if (!Array.isArray(submissions) || submissions.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="10">No submissions found.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="12">No submissions found.</td></tr>';
         return;
       }
 
@@ -95,7 +109,9 @@
             <td>${escapeHtml(item.artistEmail)}</td>
             <td>${escapeHtml(item.artTitle)}</td>
             <td>${escapeHtml(item.artDimensions)}</td>
+            <td>${item.is3D ? 'Yes' : 'No'}</td>
             <td>${escapeHtml(item.artDescription)}</td>
+            <td>${escapeHtml(item.voteCount)}</td>
             <td>
               ${tagLabel}
               <div class="admin-tag-controls">
@@ -120,7 +136,9 @@
       setStatus('Loading submissions...');
 
       try {
-        const response = await fetch('/api/admin/submissions', {
+        const sortBy = sortByInput ? sortByInput.value : 'submitted';
+        const sortDir = sortDirInput ? sortDirInput.value : 'desc';
+        const response = await fetch(`/api/admin/submissions?sortBy=${encodeURIComponent(sortBy)}&sortDir=${encodeURIComponent(sortDir)}`, {
           headers: {
             'x-admin-token': currentToken,
           },
@@ -144,6 +162,20 @@
       currentToken = tokenInput.value.trim();
       await loadSubmissions();
     });
+
+    if (sortByInput) {
+      sortByInput.addEventListener('change', async () => {
+        if (!currentToken) return;
+        await loadSubmissions();
+      });
+    }
+
+    if (sortDirInput) {
+      sortDirInput.addEventListener('change', async () => {
+        if (!currentToken) return;
+        await loadSubmissions();
+      });
+    }
 
     exportBtn.addEventListener('click', () => {
       const token = tokenInput.value.trim();

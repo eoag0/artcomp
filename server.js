@@ -137,12 +137,14 @@ function toPublicSubmission(row) {
     artistSchool: row.artist_school || null,
     artTitle: row.art_title,
     artDimensions: row.art_dimensions || null,
+    is3D: row.is_3d === true,
     artDescription: row.art_description || null,
     originalFilename: row.original_filename,
     fileUrl: row.file_url,
     fileType: row.file_type,
     submittedAt: row.submitted_at,
     finalistTier: row.finalistTier || null,
+    voteCount: Number(row.voteCount || 0),
   };
 }
 
@@ -155,6 +157,7 @@ function toAdminSubmission(row) {
     artistSchool: row.artist_school || null,
     artTitle: row.art_title,
     artDimensions: row.art_dimensions || null,
+    is3D: row.is_3d === true,
     artDescription: row.art_description || null,
     artistEmail: row.artist_email,
     originalFilename: row.original_filename,
@@ -162,12 +165,18 @@ function toAdminSubmission(row) {
     fileType: row.file_type,
     submittedAt: row.submitted_at,
     finalistTier: row.finalistTier || null,
+    voteCount: Number(row.voteCount || 0),
   };
 }
 
 function escapeCsv(value) {
   const raw = String(value ?? '');
   return `"${raw.replace(/"/g, '""')}"`;
+}
+
+function parseDimensionNumbers(input) {
+  const matches = String(input || '').match(/\d+(\.\d+)?/g) || [];
+  return matches.map((part) => Number.parseFloat(part)).filter((value) => Number.isFinite(value));
 }
 
 async function fetchFinalistMap() {
@@ -185,6 +194,39 @@ async function fetchFinalistMap() {
     });
   });
   return map;
+}
+
+async function fetchVoteCountMap() {
+  const { data, error } = await supabase
+    .from('votes')
+    .select('submission_id');
+
+  if (error) throw new Error(error.message);
+
+  const map = new Map();
+  (data || []).forEach((row) => {
+    const submissionId = Number(row.submission_id);
+    map.set(submissionId, (map.get(submissionId) || 0) + 1);
+  });
+  return map;
+}
+
+function sortAdminRows(rows, sortBy, sortDir) {
+  const direction = sortDir === 'asc' ? 1 : -1;
+  const safeSortBy = ['votes', 'submitted', 'title', 'artist'].includes(sortBy) ? sortBy : 'submitted';
+
+  rows.sort((a, b) => {
+    if (safeSortBy === 'votes') {
+      return (Number(a.voteCount || 0) - Number(b.voteCount || 0)) * direction;
+    }
+    if (safeSortBy === 'title') {
+      return String(a.art_title || '').localeCompare(String(b.art_title || '')) * direction;
+    }
+    if (safeSortBy === 'artist') {
+      return String(a.artist_name || '').localeCompare(String(b.artist_name || '')) * direction;
+    }
+    return (new Date(a.submitted_at).getTime() - new Date(b.submitted_at).getTime()) * direction;
+  });
 }
 
 app.use(express.json());
@@ -297,7 +339,7 @@ app.get('/api/submissions', async (_req, res, next) => {
     const [submissionsRes, finalistMap] = await Promise.all([
       supabase
         .from('submissions')
-        .select('id, artist_name, artist_age, artist_school, art_title, art_dimensions, art_description, original_filename, file_url, file_type, submitted_at')
+        .select('id, artist_name, artist_age, artist_school, art_title, art_dimensions, is_3d, art_description, original_filename, file_url, file_type, submitted_at')
         .order('submitted_at', { ascending: false })
         .limit(50),
       fetchFinalistMap(),
@@ -335,7 +377,7 @@ app.get('/api/finalists', async (_req, res, next) => {
 
     const { data: submissionRows, error: submissionsError } = await supabase
       .from('submissions')
-      .select('id, artist_name, artist_age, artist_school, art_title, art_dimensions, art_description, original_filename, file_url, file_type, submitted_at')
+      .select('id, artist_name, artist_age, artist_school, art_title, art_dimensions, is_3d, art_description, original_filename, file_url, file_type, submitted_at')
       .in('id', ids);
 
     if (submissionsError) throw new Error(submissionsError.message);
@@ -361,13 +403,17 @@ app.get('/api/finalists', async (_req, res, next) => {
 
 app.get('/api/admin/submissions', requireAdmin, async (_req, res, next) => {
   try {
-    const [submissionsRes, finalistMap] = await Promise.all([
+    const sortBy = String(_req.query.sortBy || 'submitted');
+    const sortDir = String(_req.query.sortDir || 'desc').toLowerCase() === 'asc' ? 'asc' : 'desc';
+
+    const [submissionsRes, finalistMap, voteCountMap] = await Promise.all([
       supabase
         .from('submissions')
-        .select('id, artist_name, artist_age, artist_school, art_title, art_dimensions, art_description, artist_email, original_filename, file_url, file_type, submitted_at')
+        .select('id, artist_name, artist_age, artist_school, art_title, art_dimensions, is_3d, art_description, artist_email, original_filename, file_url, file_type, submitted_at')
         .order('submitted_at', { ascending: false })
         .limit(1000),
       fetchFinalistMap(),
+      fetchVoteCountMap(),
     ]);
 
     if (submissionsRes.error) throw new Error(submissionsRes.error.message);
@@ -375,7 +421,9 @@ app.get('/api/admin/submissions', requireAdmin, async (_req, res, next) => {
     const merged = (submissionsRes.data || []).map((row) => ({
       ...row,
       finalistTier: finalistMap.get(Number(row.id))?.tier || null,
+      voteCount: voteCountMap.get(Number(row.id)) || 0,
     }));
+    sortAdminRows(merged, sortBy, sortDir);
 
     res.json({ submissions: merged.map(toAdminSubmission) });
   } catch (error) {
@@ -385,13 +433,14 @@ app.get('/api/admin/submissions', requireAdmin, async (_req, res, next) => {
 
 app.get('/api/admin/submissions.csv', requireAdmin, async (_req, res, next) => {
   try {
-    const [submissionsRes, finalistMap] = await Promise.all([
+    const [submissionsRes, finalistMap, voteCountMap] = await Promise.all([
       supabase
         .from('submissions')
-        .select('id, artist_name, artist_age, artist_school, art_title, art_dimensions, art_description, artist_email, original_filename, file_url, file_type, submitted_at')
+        .select('id, artist_name, artist_age, artist_school, art_title, art_dimensions, is_3d, art_description, artist_email, original_filename, file_url, file_type, submitted_at')
         .order('submitted_at', { ascending: false })
         .limit(10000),
       fetchFinalistMap(),
+      fetchVoteCountMap(),
     ]);
 
     if (submissionsRes.error) throw new Error(submissionsRes.error.message);
@@ -403,12 +452,14 @@ app.get('/api/admin/submissions.csv', requireAdmin, async (_req, res, next) => {
       'artist_school',
       'art_title',
       'art_dimensions',
+      'is_3d',
       'art_description',
       'artist_email',
       'original_filename',
       'file_url',
       'file_type',
       'finalist_tier',
+      'vote_count',
       'submitted_at',
     ];
 
@@ -419,12 +470,14 @@ app.get('/api/admin/submissions.csv', requireAdmin, async (_req, res, next) => {
       row.artist_school || '',
       row.art_title,
       row.art_dimensions || '',
+      row.is_3d === true ? 'true' : 'false',
       row.art_description || '',
       row.artist_email,
       row.original_filename,
       row.file_url,
       row.file_type,
       finalistMap.get(Number(row.id))?.tier || '',
+      voteCountMap.get(Number(row.id)) || 0,
       row.submitted_at,
     ]);
 
@@ -498,6 +551,7 @@ app.post('/api/submissions', checkSubmissionRateLimit, upload.single('artFile'),
     const artistSchool = String(req.body.artistSchool || '').trim();
     const artTitle = String(req.body.artTitle || '').trim();
     const artDimensions = String(req.body.artDimensions || '').trim();
+    const is3D = ['true', '1', 'on', 'yes'].includes(String(req.body.is3D || '').toLowerCase());
     const artDescription = String(req.body.artDescription || '').trim();
     const artistEmail = String(req.body.artistEmail || '').trim();
 
@@ -508,6 +562,15 @@ app.post('/api/submissions', checkSubmissionRateLimit, upload.single('artFile'),
     }
     if (artistAge < 15 || artistAge > 19) {
       return res.status(400).json({ error: 'artistAge must be between 15 and 19.' });
+    }
+    if (!is3D) {
+      const dimensions = parseDimensionNumbers(artDimensions);
+      if (dimensions.length < 2) {
+        return res.status(400).json({ error: 'For 2D artwork, provide at least L x W dimensions in inches.' });
+      }
+      if (dimensions[0] > 40 || dimensions[1] > 40) {
+        return res.status(400).json({ error: 'For 2D artwork, maximum size is 40 x 40 inches.' });
+      }
     }
 
     const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -538,6 +601,7 @@ app.post('/api/submissions', checkSubmissionRateLimit, upload.single('artFile'),
       artist_school: artistSchool,
       art_title: artTitle,
       art_dimensions: artDimensions,
+      is_3d: is3D,
       art_description: artDescription,
       artist_email: artistEmail,
       original_filename: req.file.originalname,
@@ -548,7 +612,7 @@ app.post('/api/submissions', checkSubmissionRateLimit, upload.single('artFile'),
     const { data: inserted, error: insertError } = await supabase
       .from('submissions')
       .insert(record)
-      .select('id, artist_name, artist_age, artist_school, art_title, art_dimensions, art_description, artist_email, original_filename, file_url, file_type, submitted_at')
+      .select('id, artist_name, artist_age, artist_school, art_title, art_dimensions, is_3d, art_description, artist_email, original_filename, file_url, file_type, submitted_at')
       .single();
 
     if (insertError) {

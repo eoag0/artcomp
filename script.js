@@ -13,6 +13,11 @@ const finalistsGrid = document.getElementById('finalists-grid');
 const votingForm = document.getElementById('voting-form');
 const votingStatus = document.getElementById('voting-status');
 
+function parseDimensionNumbers(input) {
+  const matches = String(input || '').match(/\d+(\.\d+)?/g) || [];
+  return matches.map((part) => Number.parseFloat(part)).filter((value) => Number.isFinite(value));
+}
+
 if (navToggle && navLinksContainer) {
   navToggle.addEventListener('click', () => {
     const expanded = navToggle.getAttribute('aria-expanded') === 'true';
@@ -117,6 +122,7 @@ function renderSubmissionCards(submissions) {
         <small>by ${submission.artistName}</small>
         ${(submission.artistAge || submission.artistSchool) ? `<small>Age ${submission.artistAge || '-'} | ${submission.artistSchool || '-'}</small>` : ''}
         ${submission.artDimensions ? `<small>${submission.artDimensions}</small>` : ''}
+        <small>${submission.is3D ? '3D artwork' : '2D artwork'}</small>
         ${submission.artDescription ? `<small>${submission.artDescription}</small>` : ''}
         <small>${dateLabel}</small>
         ${submission.finalistTier ? `<small class="submission-badge">${submission.finalistTier}</small>` : ''}
@@ -152,6 +158,7 @@ function renderFinalistCards(submissions) {
         <small>by ${submission.artistName}</small>
         ${(submission.artistAge || submission.artistSchool) ? `<small>Age ${submission.artistAge || '-'} | ${submission.artistSchool || '-'}</small>` : ''}
         ${submission.artDimensions ? `<small>${submission.artDimensions}</small>` : ''}
+        <small>${submission.is3D ? '3D artwork' : '2D artwork'}</small>
         ${submission.artDescription ? `<small>${submission.artDescription}</small>` : ''}
         <small>${dateLabel}</small>
         <small class="submission-badge">${submission.finalistTier || 'Finalist'}</small>
@@ -199,6 +206,7 @@ if (submissionForm && submissionStatus) {
     const artistEmail = String(formData.get('artistEmail') || '').trim();
     const artTitle = String(formData.get('artTitle') || '').trim();
     const artDimensions = String(formData.get('artDimensions') || '').trim();
+    const is3D = formData.get('is3D') === 'on';
     const artDescription = String(formData.get('artDescription') || '').trim();
     const artFile = formData.get('artFile');
 
@@ -222,6 +230,20 @@ if (submissionForm && submissionStatus) {
       submissionStatus.textContent = 'Age must be between 15 and 19.';
       submissionStatus.className = 'form-status error';
       return;
+    }
+
+    if (!is3D) {
+      const dimensions = parseDimensionNumbers(artDimensions);
+      if (dimensions.length < 2) {
+        submissionStatus.textContent = 'For 2D artwork, include at least L x W dimensions in inches.';
+        submissionStatus.className = 'form-status error';
+        return;
+      }
+      if (dimensions[0] > 40 || dimensions[1] > 40) {
+        submissionStatus.textContent = 'For 2D artwork, max size is 40 x 40 inches.';
+        submissionStatus.className = 'form-status error';
+        return;
+      }
     }
 
     const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
