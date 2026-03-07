@@ -31,12 +31,7 @@ function isImageSubmission(submission) {
   return /\.(png|jpe?g|webp|gif|avif)$/i.test(String(submission.fileUrl || ''));
 }
 
-function buildArtworkCard(submission, forcedBadge) {
-  const uploadedDate = new Date(submission.submittedAt);
-  const dateLabel = Number.isNaN(uploadedDate.getTime())
-    ? 'Unknown date'
-    : uploadedDate.toLocaleDateString();
-  const badge = forcedBadge || submission.finalistTier || '';
+function buildArtworkCard(submission) {
   const preview = isImageSubmission(submission)
     ? `<img src="${escapeHtml(submission.fileUrl)}" alt="${escapeHtml(submission.artTitle)} preview" loading="lazy" />`
     : `<div class="file-preview">Preview unavailable</div>`;
@@ -46,17 +41,13 @@ function buildArtworkCard(submission, forcedBadge) {
       <div class="art-preview">
         ${preview}
       </div>
-      <div class="submission-meta">
-        <strong>${escapeHtml(submission.artTitle)}</strong>
+      <div class="art-header">
+        <strong class="art-title">${escapeHtml(submission.artTitle)}</strong>
         ${submission.referenceNumber ? `<small class="submission-badge">Ref ${escapeHtml(submission.referenceNumber)}</small>` : ''}
-        <small>by ${escapeHtml(submission.artistName)}</small>
-        ${(submission.artistAge || submission.artistSchool) ? `<small>Age ${escapeHtml(submission.artistAge)} | ${escapeHtml(submission.artistSchool)}</small>` : ''}
-        ${submission.artDimensions ? `<small>${escapeHtml(submission.artDimensions)}</small>` : ''}
+      </div>
+      <div class="submission-meta">
         <small>${submission.is3D ? '3D artwork' : '2D artwork'}</small>
         ${submission.artDescription ? `<small>${escapeHtml(submission.artDescription)}</small>` : ''}
-        <small>${escapeHtml(dateLabel)}</small>
-        ${badge ? `<small class="submission-badge">${escapeHtml(badge)}</small>` : ''}
-        <a href="${escapeHtml(submission.fileUrl)}" target="_blank" rel="noopener">View File</a>
       </div>
     </article>
   `;
@@ -151,7 +142,7 @@ function renderSubmissionCards(submissions) {
 
   submissions.slice(0, 8).forEach((submission) => {
     const article = document.createElement('div');
-    article.innerHTML = buildArtworkCard(submission, '');
+    article.innerHTML = buildArtworkCard(submission);
     galleryGrid.appendChild(article.firstElementChild);
   });
 }
@@ -167,7 +158,7 @@ function renderFinalistCards(submissions) {
 
   submissions.forEach((submission) => {
     const article = document.createElement('div');
-    article.innerHTML = buildArtworkCard(submission, submission.finalistTier || 'Finalist');
+    article.innerHTML = buildArtworkCard(submission);
     finalistsGrid.appendChild(article.firstElementChild);
   });
 }

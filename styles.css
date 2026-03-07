@@ -421,7 +421,7 @@ ul {
   overflow: hidden;
   padding: 0;
   border: 1px solid #dfbfa7;
-  min-height: 220px;
+  min-height: 250px;
   display: block;
 }
 
@@ -444,48 +444,67 @@ ul {
   font-size: 0.85rem;
 }
 
+.art-header {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.55rem 0.65rem;
+  background: rgba(21, 16, 13, 0.86);
+  z-index: 2;
+}
+
+.art-title {
+  color: #fff;
+  font-size: 0.9rem;
+  line-height: 1.2;
+  text-align: left;
+  display: -webkit-box;
+  -webkit-line-clamp: 1;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
 .submission-meta {
   position: absolute;
-  inset: auto 0 0 0;
+  inset: 0;
   display: grid;
-  gap: 0.25rem;
+  align-content: end;
+  gap: 0.35rem;
   text-align: left;
-  background: linear-gradient(180deg, rgba(22, 17, 13, 0.05) 0%, rgba(22, 17, 13, 0.93) 48%);
+  background: linear-gradient(180deg, rgba(22, 17, 13, 0.08) 0%, rgba(22, 17, 13, 0.92) 52%);
   color: #fff8f2;
-  padding: 0.75rem;
-  transform: translateY(74%);
-  transition: transform 0.25s ease;
+  padding: 2.7rem 0.65rem 0.7rem;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.22s ease;
 }
 
 .submission-card:hover .submission-meta,
 .submission-card:focus-within .submission-meta {
-  transform: translateY(0);
-}
-
-.submission-meta strong {
-  font-size: 0.95rem;
-  color: #fff;
+  opacity: 1;
+  pointer-events: auto;
 }
 
 .submission-meta small {
   color: #fff1e2;
-  font-size: 0.79rem;
-}
-
-.submission-meta a {
-  color: #ffd8a8;
-  font-size: 0.8rem;
+  font-size: 0.82rem;
 }
 
 .submission-badge {
   display: inline-block;
   width: fit-content;
-  background: #fff1cd;
-  border: 1px solid #f2c46d;
-  color: #7a4f06;
+  background: #f2c46d;
+  border: 1px solid #f0b84a;
+  color: #2f1b03;
   border-radius: 999px;
-  padding: 0.1rem 0.55rem;
+  padding: 0.1rem 0.5rem;
   font-weight: 700;
+  font-size: 0.74rem;
 }
 
 .finalist-grid .art-slot {
@@ -722,9 +741,16 @@ textarea:focus {
     min-height: 400px;
   }
 
+  .art-header {
+    position: static;
+    background: #241913;
+  }
+
   .submission-meta {
     position: static;
-    transform: none;
+    opacity: 1;
+    pointer-events: auto;
+    padding-top: 0.6rem;
     background: #2d211a;
   }
 
