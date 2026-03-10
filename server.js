@@ -20,6 +20,7 @@ const smtpUser = process.env.SMTP_USER || '';
 const smtpPass = process.env.SMTP_PASS || '';
 const contactTo = process.env.CONTACT_TO || 'asianbartists@gmail.com';
 const contactFrom = process.env.CONTACT_FROM || smtpUser || 'no-reply@asianbloomingartists.org';
+const qrRedirectTarget = process.env.QR_REDIRECT_TARGET || '';
 
 if (!supabaseUrl || !supabaseServiceRoleKey) {
   // eslint-disable-next-line no-console
@@ -230,6 +231,20 @@ function sortAdminRows(rows, sortBy, sortDir) {
 }
 
 app.use(express.json());
+
+app.get('/qr', (req, res) => {
+  if (!qrRedirectTarget) {
+    return res.status(503).send('QR redirect is not configured yet.');
+  }
+
+  const safeTarget = String(qrRedirectTarget).trim();
+  if (!/^https?:\/\//i.test(safeTarget)) {
+    return res.status(500).send('QR_REDIRECT_TARGET must be a full http(s) URL.');
+  }
+
+  return res.redirect(302, safeTarget);
+});
+
 app.use(express.static(__dirname));
 
 app.get('/api/health', (_req, res) => {
