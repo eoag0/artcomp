@@ -33,6 +33,18 @@
             <option value="desc">Direction: Desc</option>
             <option value="asc">Direction: Asc</option>
           </select>
+          <input id="filter-text" type="text" placeholder="Filter by ref, artist, school, email, title..." autocomplete="off" />
+          <select id="filter-tag">
+            <option value="all">Tag: All</option>
+            <option value="untagged">Tag: Untagged</option>
+            <option value="finalist">Tag: Finalist</option>
+            <option value="winner">Tag: Winner</option>
+          </select>
+          <select id="filter-medium">
+            <option value="all">Medium: All</option>
+            <option value="2d">Medium: 2D</option>
+            <option value="3d">Medium: 3D</option>
+          </select>
           <button id="export-btn" class="btn btn-secondary" type="button">Export CSV</button>
           <a class="btn btn-secondary" href="/">Back to Site</a>
         </div>
@@ -73,9 +85,13 @@
     const exportBtn = document.getElementById('export-btn');
     const sortByInput = document.getElementById('sort-by');
     const sortDirInput = document.getElementById('sort-dir');
+    const filterTextInput = document.getElementById('filter-text');
+    const filterTagInput = document.getElementById('filter-tag');
+    const filterMediumInput = document.getElementById('filter-medium');
     const statusNode = document.getElementById('admin-status');
     const tbody = document.getElementById('admin-tbody');
     let currentToken = '';
+    let allSubmissions = [];
 
     function setStatus(message, type) {
       statusNode.textContent = message;
@@ -89,6 +105,46 @@
         .replace(/>/g, '&gt;')
         .replace(/"/g, '&quot;')
         .replace(/'/g, '&#39;');
+    }
+
+    function applyFilters(submissions) {
+      const query = String(filterTextInput ? filterTextInput.value : '').trim().toLowerCase();
+      const tagFilter = String(filterTagInput ? filterTagInput.value : 'all').toLowerCase();
+      const mediumFilter = String(filterMediumInput ? filterMediumInput.value : 'all').toLowerCase();
+
+      return (Array.isArray(submissions) ? submissions : []).filter((item) => {
+        const tagValue = String(item.finalistTier || '').toLowerCase();
+        const isWinner = tagValue === 'winner';
+        const isFinalist = tagValue === 'finalist';
+        const isTagged = Boolean(tagValue);
+
+        if (tagFilter === 'winner' && !isWinner) return false;
+        if (tagFilter === 'finalist' && !isFinalist) return false;
+        if (tagFilter === 'untagged' && isTagged) return false;
+
+        if (mediumFilter === '2d' && item.is3D) return false;
+        if (mediumFilter === '3d' && !item.is3D) return false;
+
+        if (!query) return true;
+        const haystack = [
+          item.referenceNumber,
+          item.artistName,
+          item.artistSchool,
+          item.artistEmail,
+          item.artTitle,
+          item.artDimensions,
+          item.artDescription,
+        ].join(' ').toLowerCase();
+        return haystack.includes(query);
+      });
+    }
+
+    function renderFilteredRows() {
+      const filtered = applyFilters(allSubmissions);
+      renderRows(filtered);
+      if (currentToken) {
+        setStatus(`Showing ${filtered.length} of ${allSubmissions.length} submissions.`, 'success');
+      }
     }
 
     function renderRows(submissions) {
@@ -122,6 +178,7 @@
                 <button type="button" class="btn btn-secondary admin-tag-btn" data-action="finalist" data-id="${item.id}">Finalist</button>
                 <button type="button" class="btn btn-secondary admin-tag-btn" data-action="winner" data-id="${item.id}">Winner</button>
                 <button type="button" class="btn btn-secondary admin-tag-btn" data-action="clear" data-id="${item.id}">Clear</button>
+                <button type="button" class="btn btn-danger admin-delete-btn" data-id="${item.id}">Delete</button>
               </div>
             </td>
             <td>${escapeHtml(item.originalFilename)}</td>
@@ -155,9 +212,11 @@
           throw new Error(payload.error || 'Could not load submissions.');
         }
 
-        renderRows(payload.submissions || []);
-        setStatus(`Loaded ${(payload.submissions || []).length} submissions.`, 'success');
+        allSubmissions = Array.isArray(payload.submissions) ? payload.submissions : [];
+        renderFilteredRows();
       } catch (error) {
+        allSubmissions = [];
+        renderRows([]);
         setStatus(error.message || 'Failed to load submissions.', 'error');
       } finally {
         loadBtn.disabled = false;
@@ -183,6 +242,24 @@
       });
     }
 
+    if (filterTextInput) {
+      filterTextInput.addEventListener('input', () => {
+        renderFilteredRows();
+      });
+    }
+
+    if (filterTagInput) {
+      filterTagInput.addEventListener('change', () => {
+        renderFilteredRows();
+      });
+    }
+
+    if (filterMediumInput) {
+      filterMediumInput.addEventListener('change', () => {
+        renderFilteredRows();
+      });
+    }
+
     exportBtn.addEventListener('click', () => {
       const token = tokenInput.value.trim();
       if (!token) {
@@ -195,7 +272,10 @@
 
     tbody.addEventListener('click', async (event) => {
       const target = event.target;
-      if (!(target instanceof HTMLButtonElement) || !target.classList.contains('admin-tag-btn')) return;
+      if (!(target instanceof HTMLButtonElement)) return;
+      const isTagAction = target.classList.contains('admin-tag-btn');
+      const isDeleteAction = target.classList.contains('admin-delete-btn');
+      if (!isTagAction && !isDeleteAction) return;
 
       const submissionId = Number.parseInt(target.dataset.id || '', 10);
       const action = target.dataset.action || '';
@@ -209,7 +289,16 @@
 
       target.disabled = true;
       try {
-        if (action === 'clear') {
+        if (isDeleteAction) {
+          const confirmed = window.confirm(`Delete submission ${submissionId}? This cannot be undone.`);
+          if (!confirmed) return;
+          const response = await fetch(`/api/admin/submissions/${submissionId}`, {
+            method: 'DELETE',
+            headers: { 'x-admin-token': currentToken },
+          });
+          const payload = await response.json();
+          if (!response.ok) throw new Error(payload.error || 'Could not delete submission.');
+        } else if (action === 'clear') {
           const response = await fetch(`/api/admin/finalists/${submissionId}`, {
             method: 'DELETE',
             headers: { 'x-admin-token': currentToken },
@@ -232,7 +321,7 @@
 
         await loadSubmissions();
       } catch (error) {
-        setStatus(error.message || 'Tag update failed.', 'error');
+        setStatus(error.message || 'Admin action failed.', 'error');
       } finally {
         target.disabled = false;
       }

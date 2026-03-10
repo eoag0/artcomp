@@ -246,6 +246,12 @@ ul {
   border: 1px solid #efc6b0;
 }
 
+.btn-danger {
+  background: #8f1f2e;
+  color: #fff;
+  border: 1px solid #8f1f2e;
+}
+
 .hero-visual {
   position: relative;
   min-height: 450px;
@@ -621,6 +627,15 @@ textarea:focus {
 
 .admin-tools input {
   max-width: 340px;
+}
+
+.admin-tools select {
+  max-width: 220px;
+}
+
+#filter-text {
+  min-width: 360px;
+  max-width: 460px;
 }
 
 .admin-table-wrap {

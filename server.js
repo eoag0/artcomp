@@ -180,6 +180,22 @@ function parseDimensionNumbers(input) {
   return matches.map((part) => Number.parseFloat(part)).filter((value) => Number.isFinite(value));
 }
 
+function extractStoragePathFromPublicUrl(fileUrl, bucketName) {
+  if (!fileUrl || !bucketName) return null;
+
+  try {
+    const parsed = new URL(String(fileUrl));
+    const pathname = decodeURIComponent(parsed.pathname || '');
+    const marker = `/object/public/${bucketName}/`;
+    const markerIndex = pathname.indexOf(marker);
+    if (markerIndex === -1) return null;
+    const rawPath = pathname.slice(markerIndex + marker.length).trim();
+    return rawPath || null;
+  } catch {
+    return null;
+  }
+}
+
 async function fetchFinalistMap() {
   const { data, error } = await supabase
     .from('finalists')
@@ -507,6 +523,54 @@ app.get('/api/admin/submissions.csv', requireAdmin, async (_req, res, next) => {
     res.setHeader('Content-Type', 'text/csv; charset=utf-8');
     res.setHeader('Content-Disposition', 'attachment; filename="submissions.csv"');
     res.status(200).send(csv);
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.delete('/api/admin/submissions/:submissionId', requireAdmin, async (req, res, next) => {
+  try {
+    const submissionId = Number.parseInt(String(req.params.submissionId || ''), 10);
+    if (!Number.isInteger(submissionId) || submissionId <= 0) {
+      return res.status(400).json({ error: 'A valid submissionId is required.' });
+    }
+
+    const { data: existing, error: existingError } = await supabase
+      .from('submissions')
+      .select('id, file_url')
+      .eq('id', submissionId)
+      .maybeSingle();
+
+    if (existingError) throw new Error(existingError.message);
+    if (!existing) {
+      return res.status(404).json({ error: 'Submission not found.' });
+    }
+
+    const { error: votesError } = await supabase
+      .from('votes')
+      .delete()
+      .eq('submission_id', submissionId);
+    if (votesError) throw new Error(votesError.message);
+
+    const { error: finalistsError } = await supabase
+      .from('finalists')
+      .delete()
+      .eq('submission_id', submissionId);
+    if (finalistsError) throw new Error(finalistsError.message);
+
+    const { error: submissionError } = await supabase
+      .from('submissions')
+      .delete()
+      .eq('id', submissionId);
+    if (submissionError) throw new Error(submissionError.message);
+
+    const storagePath = extractStoragePathFromPublicUrl(existing.file_url, supabaseBucket);
+    if (storagePath) {
+      // Best effort cleanup; this should not block deletion success.
+      await supabase.storage.from(supabaseBucket).remove([storagePath]);
+    }
+
+    return res.status(200).json({ message: 'Submission deleted.' });
   } catch (error) {
     next(error);
   }
