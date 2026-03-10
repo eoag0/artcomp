@@ -232,7 +232,7 @@ function sortAdminRows(rows, sortBy, sortDir) {
 
 app.use(express.json());
 
-app.get('/qr', (req, res) => {
+function handleQrRedirect(_req, res) {
   if (!qrRedirectTarget) {
     return res.status(503).send('QR redirect is not configured yet.');
   }
@@ -243,7 +243,10 @@ app.get('/qr', (req, res) => {
   }
 
   return res.redirect(302, safeTarget);
-});
+}
+
+app.get('/redirect', handleQrRedirect);
+app.get('/qr', handleQrRedirect);
 
 app.use(express.static(__dirname));
 
