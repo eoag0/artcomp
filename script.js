@@ -9,6 +9,10 @@ const statBubbles = document.querySelectorAll('.stat-bubble');
 const submissionForm = document.getElementById('submission-form');
 const submissionStatus = document.getElementById('submission-status');
 const galleryGrid = document.getElementById('gallery-grid');
+const galleryGridMore = document.getElementById('gallery-grid-more');
+const galleryMoreWrap = document.getElementById('gallery-more-wrap');
+const galleryToggleBtn = document.getElementById('gallery-toggle-btn');
+const galleryToggleLabel = document.querySelector('.gallery-toggle-label');
 const finalistsGrid = document.getElementById('finalists-grid');
 const votingForm = document.getElementById('voting-form');
 const votingStatus = document.getElementById('voting-status');
@@ -139,12 +143,35 @@ function renderSubmissionCards(submissions) {
   if (!galleryGrid) return;
 
   galleryGrid.innerHTML = '';
+  if (galleryGridMore) galleryGridMore.innerHTML = '';
 
-  submissions.slice(0, 8).forEach((submission) => {
+  const primaryItems = submissions.slice(0, 8);
+  const overflowItems = submissions.slice(8);
+
+  primaryItems.forEach((submission) => {
     const article = document.createElement('div');
     article.innerHTML = buildArtworkCard(submission);
     galleryGrid.appendChild(article.firstElementChild);
   });
+
+  if (galleryGridMore) {
+    overflowItems.forEach((submission) => {
+      const article = document.createElement('div');
+      article.innerHTML = buildArtworkCard(submission);
+      galleryGridMore.appendChild(article.firstElementChild);
+    });
+  }
+
+  if (galleryMoreWrap && galleryToggleBtn) {
+    const hasOverflow = overflowItems.length > 0;
+    galleryToggleBtn.hidden = !hasOverflow;
+    if (!hasOverflow) {
+      galleryMoreWrap.classList.remove('open');
+      galleryMoreWrap.setAttribute('aria-hidden', 'true');
+      galleryToggleBtn.setAttribute('aria-expanded', 'false');
+      if (galleryToggleLabel) galleryToggleLabel.textContent = 'Show More Artwork';
+    }
+  }
 }
 
 function renderFinalistCards(submissions) {
@@ -185,6 +212,19 @@ async function loadFinalists() {
   } catch {
     // Keep placeholder if backend is unavailable.
   }
+}
+
+if (galleryToggleBtn && galleryMoreWrap) {
+  galleryToggleBtn.addEventListener('click', () => {
+    const expanded = galleryToggleBtn.getAttribute('aria-expanded') === 'true';
+    const nextExpanded = !expanded;
+    galleryToggleBtn.setAttribute('aria-expanded', String(nextExpanded));
+    galleryMoreWrap.classList.toggle('open', nextExpanded);
+    galleryMoreWrap.setAttribute('aria-hidden', String(!nextExpanded));
+    if (galleryToggleLabel) {
+      galleryToggleLabel.textContent = nextExpanded ? 'Show Less Artwork' : 'Show More Artwork';
+    }
+  });
 }
 
 if (submissionForm && submissionStatus) {
