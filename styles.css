@@ -482,6 +482,7 @@ ul {
   left: calc(100% + 10px);
   width: min(320px, 70vw);
   min-height: 88%;
+  max-height: 88vh;
   display: grid;
   align-content: start;
   gap: 0.35rem;
@@ -497,6 +498,8 @@ ul {
   transform: translateX(-10px);
   transition: opacity 0.2s ease, transform 0.2s ease;
   z-index: 15;
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
 .submission-card:hover .submission-meta,
