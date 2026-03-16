@@ -47,10 +47,14 @@ function buildArtworkCard(submission) {
       </div>
       <div class="art-header">
         <strong class="art-title">${escapeHtml(submission.artTitle)}</strong>
-        ${submission.referenceNumber ? `<small class="submission-badge">Ref ${escapeHtml(submission.referenceNumber)}</small>` : ''}
+        <div class="art-badge-row">
+          ${submission.referenceNumber ? `<small class="submission-badge">Ref ${escapeHtml(submission.referenceNumber)}</small>` : ''}
+          ${submission.isAIGenerated ? '<small class="submission-badge submission-badge-ai">AI</small>' : ''}
+        </div>
       </div>
       <div class="submission-meta">
         <small>${submission.is3D ? '3D artwork' : '2D artwork'}</small>
+        <small>${submission.isAIGenerated ? 'AI generated' : 'Not AI generated'}</small>
         ${submission.artDescription ? `<small>${escapeHtml(submission.artDescription)}</small>` : ''}
       </div>
     </article>

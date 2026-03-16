@@ -469,6 +469,12 @@ ul {
   z-index: 2;
 }
 
+.art-badge-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
 .art-title {
   color: #fff;
   font-size: 0.9rem;
@@ -581,6 +587,12 @@ ul {
   padding: 0.1rem 0.5rem;
   font-weight: 700;
   font-size: 0.74rem;
+}
+
+.submission-badge-ai {
+  background: #4e8f3a;
+  border-color: #4e8f3a;
+  color: #f4fff1;
 }
 
 .finalist-grid .art-slot {
@@ -723,12 +735,12 @@ textarea:focus {
   font-weight: 800;
 }
 
-.admin-table td:nth-child(10) {
+.admin-table td:nth-child(11) {
   max-width: 260px;
 }
 
-.admin-table td:nth-child(13),
-.admin-table td:nth-child(14) {
+.admin-table td:nth-child(14),
+.admin-table td:nth-child(15) {
   max-width: 160px;
 }
 

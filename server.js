@@ -139,6 +139,7 @@ function toPublicSubmission(row) {
     artTitle: row.art_title,
     artDimensions: row.art_dimensions || null,
     is3D: row.is_3d === true,
+    isAIGenerated: row.ai_generated === true,
     artDescription: row.art_description || null,
     originalFilename: row.original_filename,
     fileUrl: row.file_url,
@@ -159,6 +160,7 @@ function toAdminSubmission(row) {
     artTitle: row.art_title,
     artDimensions: row.art_dimensions || null,
     is3D: row.is_3d === true,
+    isAIGenerated: row.ai_generated === true,
     artDescription: row.art_description || null,
     artistEmail: row.artist_email,
     originalFilename: row.original_filename,
@@ -373,7 +375,7 @@ app.get('/api/submissions', async (_req, res, next) => {
     const [submissionsRes, finalistMap] = await Promise.all([
       supabase
         .from('submissions')
-        .select('id, artist_name, artist_age, artist_school, art_title, art_dimensions, is_3d, art_description, original_filename, file_url, file_type, submitted_at')
+        .select('id, artist_name, artist_age, artist_school, art_title, art_dimensions, is_3d, ai_generated, art_description, original_filename, file_url, file_type, submitted_at')
         .order('submitted_at', { ascending: false })
         .limit(50),
       fetchFinalistMap(),
@@ -411,7 +413,7 @@ app.get('/api/finalists', async (_req, res, next) => {
 
     const { data: submissionRows, error: submissionsError } = await supabase
       .from('submissions')
-      .select('id, artist_name, artist_age, artist_school, art_title, art_dimensions, is_3d, art_description, original_filename, file_url, file_type, submitted_at')
+      .select('id, artist_name, artist_age, artist_school, art_title, art_dimensions, is_3d, ai_generated, art_description, original_filename, file_url, file_type, submitted_at')
       .in('id', ids);
 
     if (submissionsError) throw new Error(submissionsError.message);
@@ -443,7 +445,7 @@ app.get('/api/admin/submissions', requireAdmin, async (_req, res, next) => {
     const [submissionsRes, finalistMap, voteCountMap] = await Promise.all([
       supabase
         .from('submissions')
-        .select('id, artist_name, artist_age, artist_school, art_title, art_dimensions, is_3d, art_description, artist_email, original_filename, file_url, file_type, submitted_at')
+        .select('id, artist_name, artist_age, artist_school, art_title, art_dimensions, is_3d, ai_generated, art_description, artist_email, original_filename, file_url, file_type, submitted_at')
         .order('submitted_at', { ascending: false })
         .limit(1000),
       fetchFinalistMap(),
@@ -470,7 +472,7 @@ app.get('/api/admin/submissions.csv', requireAdmin, async (_req, res, next) => {
     const [submissionsRes, finalistMap, voteCountMap] = await Promise.all([
       supabase
         .from('submissions')
-        .select('id, artist_name, artist_age, artist_school, art_title, art_dimensions, is_3d, art_description, artist_email, original_filename, file_url, file_type, submitted_at')
+        .select('id, artist_name, artist_age, artist_school, art_title, art_dimensions, is_3d, ai_generated, art_description, artist_email, original_filename, file_url, file_type, submitted_at')
         .order('submitted_at', { ascending: false })
         .limit(10000),
       fetchFinalistMap(),
@@ -487,6 +489,7 @@ app.get('/api/admin/submissions.csv', requireAdmin, async (_req, res, next) => {
       'art_title',
       'art_dimensions',
       'is_3d',
+      'ai_generated',
       'art_description',
       'artist_email',
       'original_filename',
@@ -505,6 +508,7 @@ app.get('/api/admin/submissions.csv', requireAdmin, async (_req, res, next) => {
       row.art_title,
       row.art_dimensions || '',
       row.is_3d === true ? 'true' : 'false',
+      row.ai_generated === true ? 'true' : 'false',
       row.art_description || '',
       row.artist_email,
       row.original_filename,
@@ -637,6 +641,7 @@ app.post('/api/submissions', checkSubmissionRateLimit, upload.single('artFile'),
     const artHeight = Number.parseFloat(String(req.body.artHeight || ''));
     const legacyArtDimensions = String(req.body.artDimensions || '').trim();
     const is3D = ['true', '1', 'on', 'yes'].includes(String(req.body.is3D || '').toLowerCase());
+    const isAIGenerated = ['true', '1', 'on', 'yes'].includes(String(req.body.isAIGenerated || '').toLowerCase());
     const artDescription = String(req.body.artDescription || '').trim();
     const artistEmail = String(req.body.artistEmail || '').trim();
 
@@ -709,6 +714,7 @@ app.post('/api/submissions', checkSubmissionRateLimit, upload.single('artFile'),
       art_title: artTitle,
       art_dimensions: normalizedDimensions,
       is_3d: is3D,
+      ai_generated: isAIGenerated,
       art_description: artDescription,
       artist_email: artistEmail,
       original_filename: req.file.originalname,
@@ -719,7 +725,7 @@ app.post('/api/submissions', checkSubmissionRateLimit, upload.single('artFile'),
     const { data: inserted, error: insertError } = await supabase
       .from('submissions')
       .insert(record)
-      .select('id, artist_name, artist_age, artist_school, art_title, art_dimensions, is_3d, art_description, artist_email, original_filename, file_url, file_type, submitted_at')
+      .select('id, artist_name, artist_age, artist_school, art_title, art_dimensions, is_3d, ai_generated, art_description, artist_email, original_filename, file_url, file_type, submitted_at')
       .single();
 
     if (insertError) {
