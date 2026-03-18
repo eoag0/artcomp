@@ -74,6 +74,12 @@ ul {
 .section {
   padding: 5.5rem 0;
   scroll-margin-top: 88px;
+  position: relative;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.12), rgba(255, 255, 255, 0.02));
+}
+
+.section + .section {
+  box-shadow: inset 0 26px 28px -28px rgba(70, 38, 25, 0.36);
 }
 
 .section-intro {
@@ -403,6 +409,19 @@ ul {
   column-count: 5;
   column-gap: 1.1rem;
   margin-bottom: 1.4rem;
+}
+
+.gallery h2,
+.gallery h3,
+.gallery .section-intro,
+.gallery .upload-panel > h3,
+.gallery .upload-panel > p {
+  text-align: center;
+}
+
+.poster-panel {
+  margin-top: 1.1rem;
+  text-align: center;
 }
 
 .art-slot {

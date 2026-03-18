@@ -132,7 +132,7 @@ function requireAdmin(req, res, next) {
 function toPublicSubmission(row) {
   return {
     id: row.id,
-    referenceNumber: `ABA-${String(row.id).padStart(4, '0')}`,
+    referenceNumber: `ABA-${String(row.reference_number || row.id).padStart(4, '0')}`,
     artistName: row.artist_name,
     artistAge: row.artist_age ?? null,
     artistSchool: row.artist_school || null,
@@ -153,7 +153,7 @@ function toPublicSubmission(row) {
 function toAdminSubmission(row) {
   return {
     id: row.id,
-    referenceNumber: `ABA-${String(row.id).padStart(4, '0')}`,
+    referenceNumber: `ABA-${String(row.reference_number || row.id).padStart(4, '0')}`,
     artistName: row.artist_name,
     artistAge: row.artist_age ?? null,
     artistSchool: row.artist_school || null,
@@ -230,6 +230,28 @@ async function fetchVoteCountMap() {
   return map;
 }
 
+async function resequenceReferenceNumbers() {
+  const { data: rows, error } = await supabase
+    .from('submissions')
+    .select('id, submitted_at')
+    .order('submitted_at', { ascending: true })
+    .order('id', { ascending: true });
+
+  if (error) throw new Error(error.message);
+
+  const updates = (rows || []).map((row, index) => (
+    supabase
+      .from('submissions')
+      .update({ reference_number: index + 1 })
+      .eq('id', row.id)
+  ));
+
+  const results = await Promise.all(updates);
+  for (const result of results) {
+    if (result.error) throw new Error(result.error.message);
+  }
+}
+
 function sortAdminRows(rows, sortBy, sortDir) {
   const direction = sortDir === 'asc' ? 1 : -1;
   const safeSortBy = ['votes', 'submitted', 'title', 'artist'].includes(sortBy) ? sortBy : 'submitted';
@@ -286,17 +308,42 @@ app.post('/api/votes', checkContactRateLimit, async (req, res, next) => {
       return res.status(400).json({ error: 'Please provide a valid email.' });
     }
 
-    let submissionId = Number.parseInt(rawReference, 10);
-    if (Number.isNaN(submissionId)) {
+    let referenceNumber = Number.parseInt(rawReference, 10);
+    if (Number.isNaN(referenceNumber)) {
       const refMatch = rawReference.match(/^ABA-(\d{1,10})$/);
       if (!refMatch) {
         return res.status(400).json({ error: 'Reference number must look like ABA-0001.' });
       }
-      submissionId = Number.parseInt(refMatch[1], 10);
+      referenceNumber = Number.parseInt(refMatch[1], 10);
+    }
+
+    if (!Number.isInteger(referenceNumber) || referenceNumber <= 0) {
+      return res.status(400).json({ error: 'Invalid reference number.' });
+    }
+
+    let submissionId = null;
+    const { data: refRow, error: refError } = await supabase
+      .from('submissions')
+      .select('id')
+      .eq('reference_number', referenceNumber)
+      .maybeSingle();
+
+    if (refError) throw new Error(refError.message);
+    if (refRow?.id) {
+      submissionId = Number(refRow.id);
+    } else {
+      // Backward-compatible fallback for older data before reference_number existed.
+      const { data: idRow, error: idError } = await supabase
+        .from('submissions')
+        .select('id')
+        .eq('id', referenceNumber)
+        .maybeSingle();
+      if (idError) throw new Error(idError.message);
+      if (idRow?.id) submissionId = Number(idRow.id);
     }
 
     if (!Number.isInteger(submissionId) || submissionId <= 0) {
-      return res.status(400).json({ error: 'Invalid reference number.' });
+      return res.status(404).json({ error: 'That reference number was not found.' });
     }
 
     const { data: finalistRow, error: finalistError } = await supabase
@@ -375,7 +422,7 @@ app.get('/api/submissions', async (_req, res, next) => {
     const [submissionsRes, finalistMap] = await Promise.all([
       supabase
         .from('submissions')
-        .select('id, artist_name, artist_age, artist_school, art_title, art_dimensions, is_3d, ai_generated, art_description, original_filename, file_url, file_type, submitted_at')
+        .select('id, reference_number, artist_name, artist_age, artist_school, art_title, art_dimensions, is_3d, ai_generated, art_description, original_filename, file_url, file_type, submitted_at')
         .order('submitted_at', { ascending: false })
         .limit(50),
       fetchFinalistMap(),
@@ -413,7 +460,7 @@ app.get('/api/finalists', async (_req, res, next) => {
 
     const { data: submissionRows, error: submissionsError } = await supabase
       .from('submissions')
-      .select('id, artist_name, artist_age, artist_school, art_title, art_dimensions, is_3d, ai_generated, art_description, original_filename, file_url, file_type, submitted_at')
+      .select('id, reference_number, artist_name, artist_age, artist_school, art_title, art_dimensions, is_3d, ai_generated, art_description, original_filename, file_url, file_type, submitted_at')
       .in('id', ids);
 
     if (submissionsError) throw new Error(submissionsError.message);
@@ -445,7 +492,7 @@ app.get('/api/admin/submissions', requireAdmin, async (_req, res, next) => {
     const [submissionsRes, finalistMap, voteCountMap] = await Promise.all([
       supabase
         .from('submissions')
-        .select('id, artist_name, artist_age, artist_school, art_title, art_dimensions, is_3d, ai_generated, art_description, artist_email, original_filename, file_url, file_type, submitted_at')
+        .select('id, reference_number, artist_name, artist_age, artist_school, art_title, art_dimensions, is_3d, ai_generated, art_description, artist_email, original_filename, file_url, file_type, submitted_at')
         .order('submitted_at', { ascending: false })
         .limit(1000),
       fetchFinalistMap(),
@@ -472,7 +519,7 @@ app.get('/api/admin/submissions.csv', requireAdmin, async (_req, res, next) => {
     const [submissionsRes, finalistMap, voteCountMap] = await Promise.all([
       supabase
         .from('submissions')
-        .select('id, artist_name, artist_age, artist_school, art_title, art_dimensions, is_3d, ai_generated, art_description, artist_email, original_filename, file_url, file_type, submitted_at')
+        .select('id, reference_number, artist_name, artist_age, artist_school, art_title, art_dimensions, is_3d, ai_generated, art_description, artist_email, original_filename, file_url, file_type, submitted_at')
         .order('submitted_at', { ascending: false })
         .limit(10000),
       fetchFinalistMap(),
@@ -483,6 +530,7 @@ app.get('/api/admin/submissions.csv', requireAdmin, async (_req, res, next) => {
 
     const header = [
       'id',
+      'reference_number',
       'artist_name',
       'artist_age',
       'artist_school',
@@ -502,6 +550,7 @@ app.get('/api/admin/submissions.csv', requireAdmin, async (_req, res, next) => {
 
     const rows = (submissionsRes.data || []).map((row) => [
       row.id,
+      row.reference_number ?? '',
       row.artist_name,
       row.artist_age ?? '',
       row.artist_school || '',
@@ -567,6 +616,8 @@ app.delete('/api/admin/submissions/:submissionId', requireAdmin, async (req, res
       .delete()
       .eq('id', submissionId);
     if (submissionError) throw new Error(submissionError.message);
+
+    await resequenceReferenceNumbers();
 
     const storagePath = extractStoragePathFromPublicUrl(existing.file_url, supabaseBucket);
     if (storagePath) {
@@ -725,16 +776,25 @@ app.post('/api/submissions', checkSubmissionRateLimit, upload.single('artFile'),
     const { data: inserted, error: insertError } = await supabase
       .from('submissions')
       .insert(record)
-      .select('id, artist_name, artist_age, artist_school, art_title, art_dimensions, is_3d, ai_generated, art_description, artist_email, original_filename, file_url, file_type, submitted_at')
+      .select('id, reference_number, artist_name, artist_age, artist_school, art_title, art_dimensions, is_3d, ai_generated, art_description, artist_email, original_filename, file_url, file_type, submitted_at')
       .single();
 
     if (insertError) {
       throw new Error(insertError.message);
     }
 
+    await resequenceReferenceNumbers();
+
+    const { data: resequencedSubmission, error: resequencedError } = await supabase
+      .from('submissions')
+      .select('id, reference_number, artist_name, artist_age, artist_school, art_title, art_dimensions, is_3d, ai_generated, art_description, artist_email, original_filename, file_url, file_type, submitted_at')
+      .eq('id', inserted.id)
+      .single();
+    if (resequencedError) throw new Error(resequencedError.message);
+
     res.status(201).json({
       message: 'Submission received successfully.',
-      submission: toAdminSubmission(inserted),
+      submission: toAdminSubmission(resequencedSubmission),
     });
   } catch (error) {
     next(error);

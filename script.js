@@ -20,6 +20,8 @@ const is3DInput = document.getElementById('is-3d');
 const artLengthInput = document.getElementById('art-length');
 const artWidthInput = document.getElementById('art-width');
 const artHeightInput = document.getElementById('art-height');
+const galleryMainMaxHeight = 1760;
+let latestGallerySubmissions = [];
 
 function escapeHtml(value) {
   return String(value || '')
@@ -146,35 +148,51 @@ statBubbles.forEach((bubble) => bubbleObserver.observe(bubble));
 function renderSubmissionCards(submissions) {
   if (!galleryGrid) return;
 
+  latestGallerySubmissions = Array.isArray(submissions) ? submissions : [];
   galleryGrid.innerHTML = '';
   if (galleryGridMore) galleryGridMore.innerHTML = '';
 
-  const primaryItems = submissions.slice(0, 8);
-  const overflowItems = submissions.slice(8);
-
-  primaryItems.forEach((submission) => {
+  latestGallerySubmissions.forEach((submission) => {
     const article = document.createElement('div');
     article.innerHTML = buildArtworkCard(submission);
     galleryGrid.appendChild(article.firstElementChild);
   });
 
-  if (galleryGridMore) {
-    overflowItems.forEach((submission) => {
-      const article = document.createElement('div');
-      article.innerHTML = buildArtworkCard(submission);
-      galleryGridMore.appendChild(article.firstElementChild);
+  const previewImages = galleryGrid.querySelectorAll('img');
+  previewImages.forEach((image) => {
+    if (image.complete) return;
+    image.addEventListener('load', () => {
+      distributeGalleryOverflow();
+    }, { once: true });
+  });
+
+  window.requestAnimationFrame(() => {
+    window.requestAnimationFrame(() => {
+      distributeGalleryOverflow();
     });
+  });
+}
+
+function distributeGalleryOverflow() {
+  if (!galleryGrid || !galleryGridMore || !galleryMoreWrap || !galleryToggleBtn) return;
+
+  galleryGridMore.innerHTML = '';
+  const cards = Array.from(galleryGrid.children);
+  const maxHeight = Math.max(galleryMainMaxHeight, Math.round(window.innerHeight * 1.7));
+
+  while (galleryGrid.scrollHeight > maxHeight && cards.length > 1) {
+    const moveCard = cards.pop();
+    if (!moveCard) break;
+    galleryGridMore.insertBefore(moveCard, galleryGridMore.firstChild);
   }
 
-  if (galleryMoreWrap && galleryToggleBtn) {
-    const hasOverflow = overflowItems.length > 0;
-    galleryToggleBtn.hidden = !hasOverflow;
-    if (!hasOverflow) {
-      galleryMoreWrap.classList.remove('open');
-      galleryMoreWrap.setAttribute('aria-hidden', 'true');
-      galleryToggleBtn.setAttribute('aria-expanded', 'false');
-      if (galleryToggleLabel) galleryToggleLabel.textContent = 'Show More Artwork';
-    }
+  const hasOverflow = galleryGridMore.children.length > 0;
+  galleryToggleBtn.hidden = !hasOverflow;
+  if (!hasOverflow) {
+    galleryMoreWrap.classList.remove('open');
+    galleryMoreWrap.setAttribute('aria-hidden', 'true');
+    galleryToggleBtn.setAttribute('aria-expanded', 'false');
+    if (galleryToggleLabel) galleryToggleLabel.textContent = 'Show More Artwork';
   }
 }
 
@@ -230,6 +248,15 @@ if (galleryToggleBtn && galleryMoreWrap) {
     }
   });
 }
+
+let galleryResizeTimer = null;
+window.addEventListener('resize', () => {
+  if (!latestGallerySubmissions.length) return;
+  window.clearTimeout(galleryResizeTimer);
+  galleryResizeTimer = window.setTimeout(() => {
+    renderSubmissionCards(latestGallerySubmissions);
+  }, 150);
+});
 
 if (submissionForm && submissionStatus) {
   if (is3DInput && artHeightInput) {
