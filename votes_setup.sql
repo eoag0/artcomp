@@ -8,3 +8,5 @@ create table if not exists public.votes (
 
 create unique index if not exists votes_voter_email_unique
 on public.votes (lower(voter_email));
+
+alter table public.votes enable row level security;

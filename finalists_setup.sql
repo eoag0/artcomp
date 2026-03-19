@@ -4,3 +4,5 @@ create table if not exists public.finalists (
   tier text not null default 'Finalist',
   tagged_at timestamptz not null default now()
 );
+
+alter table public.finalists enable row level security;
